@@ -11,8 +11,10 @@ import (
 )
 
 func sendMessageToChat(alerts []alerttemplate.Alert, notif *Notifier) error {
-	var message = ChatNotification{}
-	var str strings.Builder
+	var (
+		message = ChatNotification{}
+		str     strings.Builder
+	)
 	templateFuncMap := template.FuncMap{
 		"Title":   strings.Title,
 		"toUpper": strings.ToUpper,

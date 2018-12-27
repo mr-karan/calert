@@ -66,31 +66,30 @@ func sendErrorEnvelope(w http.ResponseWriter, code int, message string, data int
 	}
 }
 
-func handleIndex(w http.ResponseWriter, r *http.Request) {
+func handleIndex(a *App, w http.ResponseWriter, r *http.Request) (code int, msg string, data interface{}, et ErrorType, err error) {
 	var (
 		message = "Welcome to Alertmanager - GChat bot API"
 	)
-	sendEnvelope(w, nil, message)
+	return 200, message, nil, "", nil
 }
 
-func handleNewAlert(w http.ResponseWriter, r *http.Request, n *Notifier) {
-	data := alerttemplate.Data{}
-	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+func handleNewAlert(a *App, w http.ResponseWriter, r *http.Request) (code int, msg string, data interface{}, et ErrorType, err error) {
+	var (
+		alertData = alerttemplate.Data{}
+		n         = a.notifier
+	)
+	if err := json.NewDecoder(r.Body).Decode(&alertData); err != nil {
 		errMsg := fmt.Sprintf("Error while decoding alertmanager response: %s", err)
-		sendErrorEnvelope(w, http.StatusBadRequest, errMsg, nil, excepBadRequest)
-		return
+		return http.StatusBadRequest, errMsg, nil, excepBadRequest, err
 	}
-
-	err := sendMessageToChat(data.Alerts, n)
+	err = sendMessageToChat(alertData.Alerts, &n)
 	if err != nil {
-		errLog.Printf("Error sending alert %s", err)
-		sendErrorEnvelope(w, http.StatusInternalServerError, "Something went wrong while sending alert notification", nil, excepGeneral)
-		return
+		return http.StatusInternalServerError, "Something went wrong while sending alert notification", nil, excepGeneral, err
 	}
-	sendEnvelope(w, nil, "Alert sent")
+	return http.StatusOK, "Alert sent", nil, "", nil
 }
 
-func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
+func handleHealthCheck(a *App, w http.ResponseWriter, r *http.Request) (code int, msg string, data interface{}, et ErrorType, err error) {
 	var (
 		message = ""
 		health  = HealthCheckOutputSeriailizer{
@@ -99,5 +98,5 @@ func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 			BuildDate:    date,
 		}
 	)
-	sendEnvelope(w, health, message)
+	return http.StatusOK, message, health, "", nil
 }

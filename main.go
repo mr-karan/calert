@@ -23,6 +23,30 @@ var (
 	errLog  *log.Logger
 )
 
+// App is the context that's injected into HTTP request handlers.
+type App struct {
+	notifier Notifier
+	sysLog   *log.Logger
+}
+
+// The Handler struct that takes App and a function matching
+// our useful signature.
+type Handler struct {
+	*App
+	H func(a *App, w http.ResponseWriter, r *http.Request) (code int, message string, data interface{}, et ErrorType, err error)
+}
+
+// ServeHTTP allows our Handler type to satisfy http.Handler.
+func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	code, msg, data, et, err := h.H(h.App, w, r)
+	if err != nil {
+		errLog.Printf("Error while processing request: %s", err)
+		sendErrorEnvelope(w, code, msg, data, et)
+	} else {
+		sendEnvelope(w, data, msg)
+	}
+}
+
 func initLogger() {
 	sysLog = log.New(os.Stdout, "SYS: ", log.Ldate|log.Ltime|log.Llongfile)
 	errLog = log.New(os.Stderr, "ERR: ", log.Ldate|log.Ltime|log.Llongfile)
@@ -74,14 +98,14 @@ func initPackage() {
 	// Notifier for sending alerts.
 	notifier := NewNotifier(viper.GetString("app.notification_url"), *httpClient)
 
+	context := &App{notifier, sysLog}
+
 	// init router
 	r := mux.NewRouter()
-	r.HandleFunc("/", handleIndex).Methods("GET")
-	r.HandleFunc("/create", func(w http.ResponseWriter, r *http.Request) {
-		handleNewAlert(w, r, &notifier)
-	}).Methods("POST")
+	r.Handle("/", Handler{context, handleIndex}).Methods("GET")
+	r.Handle("/create", Handler{context, handleNewAlert}).Methods("POST")
+	r.Handle("/ping", Handler{context, handleHealthCheck}).Methods("GET")
 	// TODO : r.HandleFunc("/metrics", handleMetrics).Methods("GET")
-	r.HandleFunc("/ping", handleHealthCheck).Methods("GET")
 
 	// Initialize HTTP server and pass router
 	s := &http.Server{

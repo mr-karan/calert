@@ -8,7 +8,7 @@ type (
 		Ping         string `json:"ping"`
 	}
 
-	// ChatNotification defines the fiels required to send to Chat Webhook Endpoint
+	// ChatNotification defines the fields required to send to Chat Webhook Endpoint
 	ChatNotification struct {
 		Text string `json:"text"`
 	}
