@@ -79,7 +79,6 @@ func initConfig() {
 	if err != nil {
 		errLog.Fatalf("Error reading config: %s", err)
 	}
-
 }
 
 // Package initialisation.
@@ -115,12 +114,11 @@ func initPackage() {
 		WriteTimeout: time.Millisecond * viper.GetDuration("server.write_timeout"),
 	}
 
+	// Start the web server
 	sysLog.Printf("listening on %s | %s", viper.GetString("server.address"), viper.GetString("server.socket"))
 	if err := s.ListenAndServe(); err != nil {
-		errLog.Println("error starting server:", err)
+		errLog.Fatalf("error starting server: %s", err)
 	}
-
-	sysLog.Println("bye")
 
 }
 

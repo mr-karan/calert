@@ -78,10 +78,12 @@ func handleNewAlert(a *App, w http.ResponseWriter, r *http.Request) (code int, m
 		alertData = alerttemplate.Data{}
 		n         = a.notifier
 	)
+	// decode request payload from Alertmanager in a struct
 	if err := json.NewDecoder(r.Body).Decode(&alertData); err != nil {
 		errMsg := fmt.Sprintf("Error while decoding alertmanager response: %s", err)
 		return http.StatusBadRequest, errMsg, nil, excepBadRequest, err
 	}
+	// send notification to chat
 	err = sendMessageToChat(alertData.Alerts, &n)
 	if err != nil {
 		return http.StatusInternalServerError, "Something went wrong while sending alert notification", nil, excepGeneral, err

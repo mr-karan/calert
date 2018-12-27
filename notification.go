@@ -29,6 +29,7 @@ func (n *Notifier) PushNotification(notif ChatNotification) error {
 	if err != nil {
 		return err
 	}
+	// prepare POST request to webhook endpoint
 	req, err := http.NewRequest("POST", n.root, bytes.NewBuffer(out))
 	if err != nil {
 		return err
@@ -42,6 +43,7 @@ func (n *Notifier) PushNotification(notif ChatNotification) error {
 	}
 	defer resp.Body.Close()
 
+	// if response is not 200 log error response from gchat
 	if resp.StatusCode != http.StatusOK {
 		respMsg, _ := ioutil.ReadAll(resp.Body)
 		errLog.Printf("Error sending alert Webhook API error: %s", string(respMsg))
