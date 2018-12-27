@@ -2,15 +2,33 @@
 
 <img src="images/logo.png" width="400">
 
-## Overview [![GoDoc](https://godoc.org/github.com/mr-karan/calert?status.svg)](https://godoc.org/github.com/mr-karan/calert) [![Go Report Card](https://goreportcard.com/badge/github.com/mr-karan/calert)](https://goreportcard.com/report/github.com/mr-karan/calert) [![GoCover](https://gocover.io/_badge/github.com/mr-karan/calert)](https://gocover.io/_badge/github.com/mr-karan/calert)
+## Overview [![GoDoc](https://godoc.org/github.com/mr-karan/calert?status.svg)](https://godoc.org/github.com/mr-karan/calert) [![Go Report Card](https://goreportcard.com/badge/github.com/mr-karan/calert)](https://goreportcard.com/report/github.com/mr-karan/calert)
 
 `calert` is a lightweight binary to push [Alertmanager](https://github.com/prometheus/alertmanager) notifications to [Google Chat](http://chat.google.com) via webhook integration.
 
-## Download
 
-```sh
-go get github.com/mr-karan/calert
+## Install
+
+There are various ways of installing calert.
+
+### Precompiled binaries
+
+Precompiled binaries for released versions are available in the [*Releases* section](https://github.com/mr-karan/calert/releases/).
+
+### Compiling the binary
+
+You can checkout the source code and build manually:
+
 ```
+$ mkdir -p $GOPATH/src/github.com/mr-karan/
+$ cd $GOPATH/src/github.com/mr-karan
+$ git clone https://github.com/mr-karan/calert.git
+$ cd calert
+$ make build
+$ cp config.toml.sample config.toml
+$ ./calert
+```
+
 
 ## How to Use
 
@@ -39,7 +57,7 @@ You are now ready to send alerts to Google Chat!
 - Alertmanager has the ability of group similar alerts together and fire only one event, clubbing all the alerts data into one event. `calert` leverages this and sends all alerts in one message by looping over the alerts and passing data in the template. You can configure the rules for grouping the alerts in `alertmanager.yml` config. You can read more about it [here](https://github.com/prometheus/docs/blob/master/content/docs/alerting/alertmanager.md#grouping)
 
 
-## Endpoints
+## API
 
 - POST `/create` (Used to receive new alerts and push to Google Chat)
 
@@ -59,6 +77,9 @@ You are now ready to send alerts to Google Chat!
 
 To help you quickly get started, you can `POST` a dummy payload which is similar to `Alertmanager` payload, present in [examples/send_alert.sh](examples/send_alert.sh).
 
+## Contribution
+
+PRs on Feature Requests, Bug fixes are welcome. Feel free to open an issue and have a discussion first. Read [CONTRIBUTING.md](CONTRIBUTING.md) for more details.
 
 ## License
 
