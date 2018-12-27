@@ -14,17 +14,17 @@
 
 - [ ] Add tests
 
-- [ ] Use middleware to pass around args/context/return err signature instead of naked returns (ugly! *must fix)
+- [x] Use middleware to pass around args/context/return err signature instead of naked returns (ugly! *must fix)
 
 - [ ] Create a package
 
-- [ ] Goreleaser binary
+- [x] Goreleaser binary
 
-- [ ] Images (Google chat instructions + bot usage (gif) + Logo)
+- [x] Images (Google chat instructions + bot usage (gif) + Logo)
 
-- [ ] Add documentation + comments everywhere
+- [x] Add documentation + comments everywhere
 
-- [ ] Add License, CoC, CONTRIBUTION.md
+- [x] Add License, CoC, CONTRIBUTION.md
 
 - [ ] Add metrics handler (feature request)
 
