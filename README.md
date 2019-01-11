@@ -40,7 +40,7 @@ cp config.toml.sample config.toml # change the settings like hostname, address, 
 ./calert.bin # this command starts a web server and is ready to receive events from alertmanager
 ```
 
--   Set the webhook URL from Google Chat in `[app.notification_url]` section of `config.toml`. You can refer to the [official documentation](https://developers.google.com/hangouts/chat/quickstart/incoming-bot-python#step_1_register_the_incoming_webhook) for more details.
+-   Set the webhook URL from Google Chat in `[app.chat.<yourRoomName>.notification_url]` section of `config.toml`. You can refer to the [official documentation](https://developers.google.com/hangouts/chat/quickstart/incoming-bot-python#step_1_register_the_incoming_webhook) for more details.
 
 -   Configure Alertmanager config file (`alertmanager.yml`) and give the address of calert web-server. You can refer to the [official documentation](https://prometheus.io/docs/alerting/configuration/#webhook_config) for more details.
 
