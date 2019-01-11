@@ -5,9 +5,8 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/spf13/viper"
-
 	alerttemplate "github.com/prometheus/alertmanager/template"
+	"github.com/spf13/viper"
 )
 
 func sendMessageToChat(alerts []alerttemplate.Alert, notif *Notifier, webHookURL string) error {
@@ -21,7 +20,7 @@ func sendMessageToChat(alerts []alerttemplate.Alert, notif *Notifier, webHookURL
 		"toUpper": strings.ToUpper,
 	}
 	// read template file
-	tmpl, err := template.New(viper.GetString("app.template_file")).Funcs(templateFuncMap).ParseFiles(viper.GetString("app.template_file"))
+	tmpl, err := template.New("message.tmpl").Funcs(templateFuncMap).ParseFiles(viper.GetString("app.template_file"))
 	if err != nil {
 		errLog.Printf("Error reading template %s", err)
 		return err
