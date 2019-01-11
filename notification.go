@@ -16,21 +16,20 @@ type Notifier struct {
 }
 
 // NewNotifier initialises a new instance of the Notifier.
-func NewNotifier(root string, h http.Client) Notifier {
+func NewNotifier(h http.Client) Notifier {
 	return Notifier{
-		root:       root,
 		httpClient: &h,
 	}
 }
 
 // PushNotification pushes out a notification to Google Chat Room.
-func (n *Notifier) PushNotification(notif ChatNotification) error {
+func (n *Notifier) PushNotification(notif ChatNotification, webHookURL string) error {
 	out, err := json.Marshal(notif)
 	if err != nil {
 		return err
 	}
 	// prepare POST request to webhook endpoint
-	req, err := http.NewRequest("POST", n.root, bytes.NewBuffer(out))
+	req, err := http.NewRequest("POST", webHookURL, bytes.NewBuffer(out))
 	if err != nil {
 		return err
 	}

@@ -10,7 +10,7 @@ import (
 	alerttemplate "github.com/prometheus/alertmanager/template"
 )
 
-func sendMessageToChat(alerts []alerttemplate.Alert, notif *Notifier) error {
+func sendMessageToChat(alerts []alerttemplate.Alert, notif *Notifier, webHookURL string) error {
 	var (
 		message = ChatNotification{}
 		str     strings.Builder
@@ -40,5 +40,5 @@ func sendMessageToChat(alerts []alerttemplate.Alert, notif *Notifier) error {
 	// prepare request payload for Google chat webhook endpoint
 	message.Text = str.String()
 
-	return notif.PushNotification(message)
+	return notif.PushNotification(message, webHookURL)
 }

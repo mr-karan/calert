@@ -213,4 +213,4 @@ alerts1='{
    "groupKey":"{}:{alertname=\"Instance Down\"}"
 }'
 
-curl -XPOST -d"$alerts1" http://localhost:6000/create -i
+curl -XPOST -d"$alerts1" http://localhost:6000/create?room_name=alertManagerTestRoom -i

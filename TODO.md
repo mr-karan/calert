@@ -1,32 +1,33 @@
-- [x] Add route for inserting new alert
+-   [x] Add route for inserting new alert
 
-- [x] Parse alertmanager reponse
+-   [x] Parse alertmanager reponse
 
-- [x] Add example payload - curl script
+-   [x] Add example payload - curl script
 
-- [x] Log only errors (unix philosophy)
+-   [x] Log only errors (unix philosophy)
 
-- [x] Response check from google chat
+-   [x] Response check from google chat
 
-- [x] Gomod
+-   [x] Gomod
 
-- [x] Refactor to new name
+-   [x] Refactor to new name
 
-- [ ] Add tests
+-   [ ] Add tests
 
-- [x] Use middleware to pass around args/context/return err signature instead of naked returns (ugly! *must fix)
+-   [x] Use middleware to pass around args/context/return err signature instead of naked returns (ugly! \*must fix)
 
-- [ ] Create a package
+-   [ ] Create a package
 
-- [x] Goreleaser binary
+-   [x] Goreleaser binary
 
-- [x] Images (Google chat instructions + bot usage (gif) + Logo)
+-   [x] Images (Google chat instructions + bot usage (gif) + Logo)
 
-- [x] Add documentation + comments everywhere
+-   [x] Add documentation + comments everywhere
 
-- [x] Add License, CoC, CONTRIBUTION.md
+-   [x] Add License, CoC, CONTRIBUTION.md
 
-- [ ] Add metrics handler (feature request)
+-   [ ] Add metrics handler (feature request)
 
-- [ ] Add verbose mode (optional, low priority)
+-   [ ] Add verbose mode (optional, low priority)
 
+-   [x] Add support for chat room param, so people can use multiple chat rooms based on alertmanager config (DUH! How could I possibly miss this)

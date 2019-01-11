@@ -13,9 +13,14 @@ keepalive_timeout=300000
 max_body_size=20000
 
 [app]
-notification_url = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=abc-xyz&token=token-unique-key%3D"
 template_file = "message.tmpl"
 
 [app.http_client]
 max_idle_conns =  100
 request_timeout = 8000
+
+[app.chat.alertManagerTestRoom]
+notification_url = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=abc-xyz&token=token-unique-key%3D"
+
+[app.chat.awesomeRoomTwo]
+notification_url = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=abc-xyz&token=token-unique-key%3D"

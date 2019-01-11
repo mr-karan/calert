@@ -95,7 +95,7 @@ func initPackage() {
 		}}
 
 	// Notifier for sending alerts.
-	notifier := NewNotifier(viper.GetString("app.notification_url"), *httpClient)
+	notifier := NewNotifier(*httpClient)
 
 	context := &App{notifier, sysLog}
 
