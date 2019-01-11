@@ -60,7 +60,9 @@ func initConfig() {
 		os.Exit(0)
 	}
 
-	viper.SetConfigName("config")
+	// Config Path flag.
+	flagSet.String("config.file", "", "Path to config file")
+
 	viper.SetDefault("server.address", ":5000")
 	viper.SetDefault("server.socket", "/tmp/calert.sock")
 	viper.SetDefault("server.name", "calert")
@@ -68,13 +70,20 @@ func initConfig() {
 	viper.SetDefault("server.write_timeout", 5000)
 	viper.SetDefault("server.keepalive_timeout", 30000)
 	viper.SetDefault("server.max_body_size", 5000)
-
 	// Process flags.
 	flagSet.Parse(os.Args[1:])
 	viper.BindPFlags(flagSet)
 
 	// Config file.
-	viper.AddConfigPath(".")
+	// check if config.file flag is passed and read from the file if it is set
+	configPath := viper.GetString("config.file")
+	if configPath != "" {
+		viper.SetConfigFile(configPath)
+	} else {
+		// fallback to default config.
+		viper.SetConfigName("config")
+		viper.AddConfigPath(".")
+	}
 	err := viper.ReadInConfig()
 	if err != nil {
 		errLog.Fatalf("Error reading config: %s", err)

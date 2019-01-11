@@ -54,6 +54,8 @@ You are now ready to send alerts to Google Chat!
 
 -   Alertmanager has the ability of group similar alerts together and fire only one event, clubbing all the alerts data into one event. `calert` leverages this and sends all alerts in one message by looping over the alerts and passing data in the template. You can configure the rules for grouping the alerts in `alertmanager.yml` config. You can read more about it [here](https://github.com/prometheus/docs/blob/master/content/docs/alerting/alertmanager.md#grouping)
 
+-   You can use `--config.file` parameter to supply a custom config file path while running `calert`.
+
 ## API
 
 -   POST `/create?room_name=<>` (Used to receive new alerts and push to Google Chat)
