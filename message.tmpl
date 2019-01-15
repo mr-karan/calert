@@ -1,5 +1,4 @@
 *{{ .Labels.alertname | Title }} - {{.Status | Title }} ({{.Labels.severity | toUpper }})*
-Instance: {{.Labels.instance}}
 {{ range .Annotations.SortedPairs -}}
 {{ .Name }}: {{ .Value}}
 {{ end -}}
