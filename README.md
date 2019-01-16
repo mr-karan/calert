@@ -90,7 +90,7 @@ To help you quickly get started, you can `POST` a dummy payload which is similar
 
     -   **template_file**: Path to template file used for parsing Alertmanager payload to Google Chat message. You can configure the default template for notification and create your own. Create a [template](https://golang.org/pkg/text/template/) file, similar to [message.tmpl](message.tmpl) and set the path of this file in this setting.
     -   **http_client**
-        -   **max_idle_conns**: _Optional_, human identifier for the server.
+        -   **max_idle_conns**: _Optional_, Maximum count of keep-alive collections per host.
         -   **request_timeout**: Duration (in milliseconds) to wait for the response.
     -   **chat.your_room_name**
         -   **notification_url**: Webhook URL of Google Chat Room where Incoming Webhooks are configured.
