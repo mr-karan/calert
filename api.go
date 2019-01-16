@@ -34,7 +34,7 @@ type apiResponse struct {
 }
 
 // sendEnvelope is used to send success response based on format defined in apiResponse
-func sendEnvelope(w http.ResponseWriter, data interface{}, message string) {
+func sendEnvelope(w http.ResponseWriter, code int, message string, data interface{}) {
 	// Standard marshalled envelope for success.
 	a := apiResponse{
 		Status:  statusSuccess,
@@ -43,7 +43,7 @@ func sendEnvelope(w http.ResponseWriter, data interface{}, message string) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(code)
 	err := json.NewEncoder(w).Encode(a)
 	if err != nil {
 		errLog.Panicf("Quitting %s", err)
