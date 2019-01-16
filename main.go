@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+
 	flag "github.com/spf13/pflag"
 
 	"github.com/spf13/viper"
@@ -16,7 +17,7 @@ import (
 var (
 	// Version of the build.
 	// This is injected at build-time.
-	// Be sure to run the provided run script to inject correctly.
+	// Be sure to run the provided run script to inject correctly (check Makefile).
 	version = "unknown"
 	date    = "unknown"
 	sysLog  *log.Logger
@@ -26,24 +27,24 @@ var (
 // App is the context that's injected into HTTP request handlers.
 type App struct {
 	notifier Notifier
-	sysLog   *log.Logger
 }
 
-// The Handler struct that takes App and a function matching
-// our useful signature.
+// The Handler struct takes App and a function matching
+// our useful signature. It is used to pass App as context in handlers
 type Handler struct {
 	*App
-	H func(a *App, w http.ResponseWriter, r *http.Request) (code int, message string, data interface{}, et ErrorType, err error)
+	HandleRequest func(a *App, w http.ResponseWriter, r *http.Request) (code int, message string, data interface{}, et ErrorType, err error)
 }
 
-// ServeHTTP allows our Handler type to satisfy http.Handler.
+// ServeHTTP allows our Handler type to satisfy http.Handler so that
+// Handler can be used with r.Handle.
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	code, msg, data, et, err := h.H(h.App, w, r)
-	if err != nil {
+	code, msg, data, et, err := h.HandleRequest(h.App, w, r)
+	if et != "" {
 		errLog.Printf("Error while processing request: %s", err)
 		sendErrorEnvelope(w, code, msg, data, et)
 	} else {
-		sendEnvelope(w, data, msg)
+		sendEnvelope(w, code, msg, data)
 	}
 }
 
@@ -69,7 +70,6 @@ func initConfig() {
 	viper.SetDefault("server.read_timeout", 1000)
 	viper.SetDefault("server.write_timeout", 5000)
 	viper.SetDefault("server.keepalive_timeout", 30000)
-	viper.SetDefault("server.max_body_size", 5000)
 	// Process flags.
 	flagSet.Parse(os.Args[1:])
 	viper.BindPFlags(flagSet)
@@ -90,29 +90,34 @@ func initConfig() {
 	}
 }
 
-// Package initialisation.
-func initPackage() {
-	initLogger()
-	initConfig()
-
+func initClient() *http.Client {
 	// Generic HTTP handler for communicating with the Chat webhook endpoint.
-	httpClient := &http.Client{
+	return &http.Client{
 		Timeout: time.Duration(viper.GetDuration("app.http_client.request_timeout") * time.Millisecond),
 		Transport: &http.Transport{
 			MaxIdleConnsPerHost:   viper.GetInt("app.http_client.max_idle_conns"),
 			ResponseHeaderTimeout: time.Duration(viper.GetDuration("app.http_client.request_timeout") * time.Millisecond),
 		}}
+}
 
-	// Notifier for sending alerts.
-	notifier := NewNotifier(*httpClient)
+// prog initialisation.
+func init() {
+	initLogger()
+	initConfig()
+}
 
-	context := &App{notifier, sysLog}
+func main() {
+	var (
+		httpClient = initClient()
+		notifier   = NewNotifier(*httpClient)
+		appConfig  = &App{notifier}
+	)
 
 	// init router
 	r := mux.NewRouter()
-	r.Handle("/", Handler{context, handleIndex}).Methods("GET")
-	r.Handle("/create", Handler{context, handleNewAlert}).Methods("POST")
-	r.Handle("/ping", Handler{context, handleHealthCheck}).Methods("GET")
+	r.Handle("/", Handler{appConfig, handleIndex}).Methods("GET")
+	r.Handle("/create", Handler{appConfig, handleNewAlert}).Methods("POST")
+	r.Handle("/ping", Handler{appConfig, handleHealthCheck}).Methods("GET")
 	// TODO : r.HandleFunc("/metrics", handleMetrics).Methods("GET")
 
 	// Initialize HTTP server and pass router
@@ -121,6 +126,7 @@ func initPackage() {
 		Handler:      r,
 		ReadTimeout:  time.Millisecond * viper.GetDuration("server.read_timeout"),
 		WriteTimeout: time.Millisecond * viper.GetDuration("server.write_timeout"),
+		IdleTimeout:  time.Millisecond * viper.GetDuration("server.keepalive_timeout"),
 	}
 
 	// Start the web server
@@ -128,9 +134,4 @@ func initPackage() {
 	if err := s.ListenAndServe(); err != nil {
 		errLog.Fatalf("error starting server: %s", err)
 	}
-
-}
-
-func main() {
-	initPackage()
 }
