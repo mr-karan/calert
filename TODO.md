@@ -12,11 +12,9 @@
 
 -   [x] Refactor to new name
 
--   [ ] Add tests
+-   [x] Add tests
 
 -   [x] Use middleware to pass around args/context/return err signature instead of naked returns (ugly! \*must fix)
-
--   [ ] Create a package
 
 -   [x] Goreleaser binary
 
@@ -26,8 +24,8 @@
 
 -   [x] Add License, CoC, CONTRIBUTION.md
 
+-   [x] Add support for chat room param, so people can use multiple chat rooms based on alertmanager config (DUH! How could I possibly miss this)
+
 -   [ ] Add metrics handler (feature request)
 
 -   [ ] Add verbose mode (optional, low priority)
-
--   [x] Add support for chat room param, so people can use multiple chat rooms based on alertmanager config (DUH! How could I possibly miss this)
