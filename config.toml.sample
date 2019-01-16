@@ -10,7 +10,6 @@ name = "calert"
 read_timeout=5000
 write_timeout=5000
 keepalive_timeout=300000
-max_body_size=20000
 
 [app]
 template_file = "message.tmpl"
