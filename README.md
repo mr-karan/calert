@@ -35,7 +35,7 @@
 
 ### Installation
 
-There are two ways of installing calert.
+There are multiple ways of installing/running calert.
 
 -   ### Precompiled binaries
 
@@ -54,6 +54,9 @@ There are two ways of installing calert.
     $ cp config.toml.sample config.toml
     $ ./calert
     ```
+ 
+-   ### Running as docker container
+    `docker pull mrkaran/calert:1.0.0-stable`
 
 ### Quickstart
 
