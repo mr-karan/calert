@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: calert-deployment-service
+  namespace: default
+  labels:
+    app: allow-users-traffic
+spec:
+  ports:
+  - protocol: TCP
+    port: 6000
+  selector:
+    app: calert
+    tier: api
+  type: NodePort

@@ -1,0 +1,36 @@
+apiVersion: v1
+data:
+  config.toml: |
+    # All timeouts and durations are in milliseconds.
+
+    [server]
+    address = ":6000"
+    socket = "/tmp/calert.sock"
+    name = "calert"
+
+    # WARNING If these timeouts are less than 1s,
+    # the server connection breaks.
+    read_timeout=8000
+    write_timeout=8000
+    keepalive_timeout=300000
+
+    [app]
+    template_file = "message.tmpl"
+
+    [app.http_client]
+    max_idle_conns =  100
+    request_timeout = 8000
+
+    [app.chat.alertManagerTestRoom]
+    notification_url = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=abc-xyz&token=token-unique-key%3D"
+
+    [app.chat.awesomeRoomTwo]
+    notification_url = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=abc-xyz&token=token-unique-key%3D"
+kind: ConfigMap
+metadata:
+  creationTimestamp: "2019-04-19T11:48:08Z"
+  name: calert-config
+  namespace: default
+  resourceVersion: "105527"
+  selfLink: /api/v1/namespaces/default/configmaps/calert-config
+  uid: 0038ce5e-6299-11e9-a95f-42010aa00061

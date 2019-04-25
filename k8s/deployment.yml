@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calert-deployment
+  labels:
+    app: calert
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: calert
+  template:
+    metadata:
+      labels:
+        app: calert
+        tier: api
+    spec:
+      containers:
+      - name: calert
+        image: mrkaran/calert:1.0.0-stable
+        ports:
+        - containerPort: 6000
+        volumeMounts:
+        - mountPath: /etc/calert/
+          name: config-dir
+      volumes:
+        - name: config-dir
+          configMap:
+            name: calert-config
+            items:
+            - key: config.toml
+              path: config.toml
