@@ -4,11 +4,13 @@ calert pushes Alertmanager notifications to Google Chat via webhook integration.
 
 
 To install the chart with the release name `calert`, in the namespace `clu-inf-all`, using the Google Hangouts Chat webhooks listed in the file `calert_values.yaml`:
+
 ```console
 $ helm install incubator/calert --values=calert_values.yaml --name=calert --namespace=clu-inf-all
 ```
 
 calert_values.yaml
+
 ```yaml
 configmap:
   rooms: |
@@ -40,3 +42,24 @@ configmap:
 | `configmap.rooms`                           | List of webhooks to send to. See `calert_values.yaml` above      | [app.chat.alertManagerTestRoom] |
 | `service.type`                              | Service type                                                     | ClusterIP                       |
 | `service.port`                              | Should be same as `configmap.server.address` but without the `:` | 6000                            |
+
+
+## Alertmanager configuration
+NOTE: Currently this chart has only been tested with the `prometheus-operator` chart, so that is the only configuration described below:
+
+The following changes should be made in the Alertmanager section of the `prometheus-operator` values file:
+
+```yaml
+alertmanager:
+  config:
+    route:
+      routes:
+      - match:
+          severity: critical
+        receiver: google-chat
+        group_by: [alertname]
+    receivers:
+    - name: 'google-chat'
+      webhook_configs:
+      - url: "http://calert.clu-inf-all.svc.cluster.local:6000/create?room_name=<room>"
+```
