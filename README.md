@@ -58,6 +58,9 @@ There are multiple ways of installing/running calert.
 -   ### Running as docker container
     `docker pull mrkaran/calert:1.0.0-stable`
 
+-   ### Deploying on Kubernetes cluster
+    `kustomize build ./kustomize/overlays/prod | kubectl apply -f -`
+
 ### Quickstart
 
 ```sh

@@ -26,6 +26,6 @@ tsconfig.json
 jsconfig.json
 
 ### Misc ###
-config.toml
+# config.toml
 .goreleaser.yml
 .DS_Store
