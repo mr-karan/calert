@@ -1,0 +1,6 @@
+resources:
+- deployments/calert.yaml
+- deployments/redis.yaml
+- services/calert.yaml
+- services/redis.yaml
+namePrefix: calert-

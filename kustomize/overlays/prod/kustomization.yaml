@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: calert
+commonLabels:
+  env: prod
+  group: calert
+resources:
+  - namespace.yaml
+  - ../../base
+patchesStrategicMerge:
+- patches/resource-limits.yaml
+# - patches/service-calert.yaml
+- patches/add-labels.yaml
+
+images:
+  - name: mrkaran/calert
+    newTag: 1.0.0-stable
+# patchesJson6902:
+# - target:
+#     group: apps
+#     version: v1
+#     kind: Deployment
+#     name: app
+#   path: patches/add-redis-labels.yaml
+# - target:
+#     group: apps
+#     version: v1
+#     kind: Deployment
+#     name: app
+#   path: patches/add-labels.yaml
+configMapGenerator:
+- name: app-config
+  files:
+    - raw/config.toml
