@@ -2,8 +2,8 @@ package main
 
 import (
 	"bytes"
-	"html/template"
 	"strings"
+	"text/template"
 
 	alerttemplate "github.com/prometheus/alertmanager/template"
 	"github.com/spf13/viper"
