@@ -10,3 +10,5 @@ require (
 	github.com/spf13/viper v1.3.1
 	golang.org/x/arch v0.0.0-20181203225421-5a4828bb7045 // indirect
 )
+
+go 1.13
