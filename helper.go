@@ -26,7 +26,11 @@ func sendMessageToChat(alerts []alerttemplate.Alert, notif *Notifier, webHookURL
 		return err
 	}
 	// loop through list of alerts and append the data in template
-	for _, a := range alerts {
+	size := len(alerts)
+	for index, a := range alerts {
+
+		sysLog.Printf("Processing alerts #%d", index)
+
 		var to bytes.Buffer
 		err = tmpl.Execute(&to, a)
 		if err != nil {
@@ -35,9 +39,21 @@ func sendMessageToChat(alerts []alerttemplate.Alert, notif *Notifier, webHookURL
 		}
 		str.WriteString(to.String())
 		str.WriteString("\n")
+		if (((index + 1) % 7) == 0) || ((size - index) == 1) {
+			// send message every 7 alert at maximum
+			// message should not longer than 4096 characters since google chat limitation
+			message.Text = str.String()
+			if len(message.Text) > 7 {
+				err := notif.PushNotification(message, webHookURL)
+				if err != nil {
+					errLog.Printf("Error pushing alerts #%d", index)
+					errLog.Printf("Alerts %s", to.String())
+					return err
+				}
+			}
+			str.Reset()
+		}
 	}
-	// prepare request payload for Google chat webhook endpoint
-	message.Text = str.String()
 
-	return notif.PushNotification(message, webHookURL)
+	return nil
 }
