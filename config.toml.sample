@@ -13,6 +13,7 @@ keepalive_timeout=300000
 
 [app]
 template_file = "message.tmpl"
+max_size = 4000
 
 [app.http_client]
 max_idle_conns =  100
