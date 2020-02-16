@@ -25,6 +25,7 @@ func sendMessageToChat(alerts []alerttemplate.Alert, notif *Notifier, webHookURL
 		errLog.Printf("Error reading template %s", err)
 		return err
 	}
+	maxSize := viper.GetInt("app.max_size")
 	// loop through list of alerts and append the data in template
 	for _, a := range alerts {
 		var to bytes.Buffer
@@ -32,6 +33,15 @@ func sendMessageToChat(alerts []alerttemplate.Alert, notif *Notifier, webHookURL
 		if err != nil {
 			errLog.Printf("Error parsing values in template %s", err)
 			return err
+		}
+		if (len(str.String()) + len(to.String())) >= maxSize {
+			message.Text = str.String()
+			err := notif.PushNotification(message, webHookURL)
+			if err != nil {
+				errLog.Printf("Error pushing alert %s", err)
+				// Continue on, perhaps it was just a single message lost
+			}
+			str.Reset()
 		}
 		str.WriteString(to.String())
 		str.WriteString("\n")

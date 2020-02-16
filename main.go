@@ -70,6 +70,7 @@ func initConfig() {
 	viper.SetDefault("server.read_timeout", 1000)
 	viper.SetDefault("server.write_timeout", 5000)
 	viper.SetDefault("server.keepalive_timeout", 30000)
+	viper.SetDefault("app.max_size", 4000)
 	// Process flags.
 	flagSet.Parse(os.Args[1:])
 	viper.BindPFlags(flagSet)
