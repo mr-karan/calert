@@ -1,0 +1,12 @@
+apiVersion: v1
+appVersion: 1.0.0
+description: A Helm chart for the calert webhook used for Prometheus to Google Chat integration
+name: calert
+version: 1.0.0
+icon: https://github.com/mr-karan/calert/raw/master/images/logo.png
+home: https://github.com/mr-karan/calert
+sources:
+- https://github.com/mr-karan/calert
+maintainers:
+- name: Karan Sharma
+  email: karansharma1295@gmail.com

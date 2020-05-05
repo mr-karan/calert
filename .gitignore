@@ -29,3 +29,4 @@ jsconfig.json
 config.toml
 .goreleaser.yml
 .DS_Store
+/calert/*.tgz

@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "calert.fullname" . }}
+  labels:
+{{ include "calert.labels" . | indent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "calert.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "calert.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+    {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+          - containerPort: {{ .Values.service.port }}
+            protocol: TCP
+          volumeMounts:
+          - mountPath: /etc/calert/
+            name: config-dir
+          livenessProbe:
+            httpGet:
+              httpHeaders:
+              - name: X-Causation-ID
+                value: kube-health
+              path: "/ping"
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 60
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              httpHeaders:
+              - name: X-Causation-ID
+                value: kube-health
+              path: "/ping"
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 60
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: config-dir
+          configMap:
+            name: calert-config
+            items:
+            - key: config.toml
+              path: config.toml
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
