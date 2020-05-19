@@ -54,12 +54,14 @@ The following changes should be made in the Alertmanager section of the `prometh
 alertmanager:
   config:
     route:
+      receiver: "null"
       routes:
       - match:
           severity: critical
         receiver: google-chat
         group_by: [alertname]
     receivers:
+    - name: "null"
     - name: 'google-chat'
       webhook_configs:
       - url: "http://calert.clu-inf-all.svc.cluster.local:6000/create?room_name=<room>"
