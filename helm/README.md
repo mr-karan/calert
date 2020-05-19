@@ -30,6 +30,7 @@ configmap:
 | `image.tag`                                 | Docker image tag                                                 | 1.0.0-stable                    |
 | `image.pullPolicy`                          | Docker image pull policy                                         | Always                          |
 | `replicaCount`                              | Number of pod replicas                                           | 1                               |
+| `template_file`                             | Content of Application template file                             | "..." (see values)              |
 | `configmap.server.address`                  | Port that the app listens to in the pod                          | ":6000"                         |
 | `configmap.server.socket`                   | Socket that the app listens to in the pod                        | "/tmp/calert.sock"              |
 | `configmap.server.name`                     | Name for the server instance                                     | "calert"                        |

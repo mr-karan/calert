@@ -8,6 +8,7 @@ metadata:
     heritage: {{ .Release.Service }}
     release: {{ .Release.Name }}
 data:
+  message.tmpl: {{- toYaml .Values.template_file | indent 4 }}
   config.toml: |
     # All timeouts and durations are in milliseconds.
 

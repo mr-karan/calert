@@ -25,6 +25,12 @@ configmap:
     [app.chat.awesomeRoomTwo]
     notification_url = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=abc-xyz&token=token-unique-key%3D"
 
+template_file: |
+  *{{ .Labels.alertname | Title }} - {{.Status | Title }} ({{.Labels.severity | toUpper }})*
+  {{ range .Annotations.SortedPairs -}}
+  {{ .Name }}: {{ .Value}}
+  {{ end -}}
+
 replicaCount: 1
 
 image:
