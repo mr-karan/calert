@@ -55,7 +55,7 @@ spec:
       volumes:
         - name: config-dir
           configMap:
-            name: calert-config
+            name: {{ template "calert.fullname" . }}-config
             items:
             - key: config.toml
               path: config.toml
