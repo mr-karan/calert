@@ -13,7 +13,7 @@ configmap:
     write_timeout: "8000"
     keepalive_timeout: "300000"
   app:
-    template_file: "message.tmpl"
+    template_file: "/etc/calert/message.tmpl"
     http_client:
       max_idle_conns: "100"
       request_timeout: "8000"

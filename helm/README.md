@@ -37,7 +37,7 @@ configmap:
 | `configmap.server.read_timeout`             | Read timeout in milliseconds                                     | "8000"                          |
 | `configmap.server.write_timeout`            | Write timeout in milliseconds                                    | "8000"                          |
 | `configmap.server.keepalive_timeout`        | Keepalive timeout in milliseconds                                | "300000"                        |
-| `configmap.app.template_file`               | Application template file                                        | "message.tmpl"                  |
+| `configmap.app.template_file`               | Application template file                                        | "/etc/calert/message.tmpl"      |
 | `configmap.app.http_client.max_idle_conns`  | Client max idele connections                                     | "100"                           |
 | `configmap.app.http_client.request_timeout` | Client request timeout in milliseconds                           | "8000"                          |
 | `configmap.rooms`                           | List of webhooks to send to. See `calert_values.yaml` above      | [app.chat.alertManagerTestRoom] |
