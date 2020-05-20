@@ -29,6 +29,7 @@ configmap:
 | `image.repository`                          | Docker image repository                                          | mrkaran/calert                  |
 | `image.tag`                                 | Docker image tag                                                 | 1.0.0-stable                    |
 | `image.pullPolicy`                          | Docker image pull policy                                         | Always                          |
+| `command`                                   | Command to run                                                   | "..." (see values)              |
 | `replicaCount`                              | Number of pod replicas                                           | 1                               |
 | `template_file`                             | Content of Application template file                             | "..." (see values)              |
 | `configmap.server.address`                  | Port that the app listens to in the pod                          | ":6000"                         |

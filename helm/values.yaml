@@ -38,6 +38,10 @@ image:
   tag: 1.0.0-stable
   pullPolicy: Always
 
+command:
+- "./calert"
+- "--config.file=/etc/calert/config.toml"
+
 nameOverride: ""
 fullnameOverride: ""
 

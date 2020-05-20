@@ -27,6 +27,10 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            {{- range .Values.command }}
+            - {{ . | quote }}
+            {{- end }}
           ports:
           - containerPort: {{ .Values.service.port }}
             protocol: TCP
