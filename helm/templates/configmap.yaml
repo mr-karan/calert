@@ -25,6 +25,7 @@ data:
 
     [app]
     template_file = {{ .Values.configmap.app.template_file | quote }}
+    max_size = {{ .Values.configmap.app.max_size }}
 
     [app.http_client]
     max_idle_conns = {{ .Values.configmap.app.http_client.max_idle_conns }}

@@ -14,6 +14,7 @@ configmap:
     keepalive_timeout: "300000"
   app:
     template_file: "/etc/calert/message.tmpl"
+    max_size: 4000
     http_client:
       max_idle_conns: "100"
       request_timeout: "8000"
