@@ -14,6 +14,7 @@ configmap:
     keepalive_timeout: "300000"
   app:
     template_file: "/etc/calert/message.tmpl"
+    max_size: 4000
     http_client:
       max_idle_conns: "100"
       request_timeout: "8000"
@@ -35,8 +36,12 @@ replicaCount: 1
 
 image:
   repository: mrkaran/calert
-  tag: 1.0.0-stable
+  tag: v1.2.0
   pullPolicy: Always
+
+command:
+- "./calert"
+- "--config.file=/etc/calert/config.toml"
 
 nameOverride: ""
 fullnameOverride: ""

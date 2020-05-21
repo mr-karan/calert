@@ -29,6 +29,7 @@ configmap:
 | `image.repository`                          | Docker image repository                                          | mrkaran/calert                  |
 | `image.tag`                                 | Docker image tag                                                 | 1.0.0-stable                    |
 | `image.pullPolicy`                          | Docker image pull policy                                         | Always                          |
+| `command`                                   | Command to run                                                   | "..." (see values)              |
 | `replicaCount`                              | Number of pod replicas                                           | 1                               |
 | `template_file`                             | Content of Application template file                             | "..." (see values)              |
 | `configmap.server.address`                  | Port that the app listens to in the pod                          | ":6000"                         |
@@ -38,6 +39,7 @@ configmap:
 | `configmap.server.write_timeout`            | Write timeout in milliseconds                                    | "8000"                          |
 | `configmap.server.keepalive_timeout`        | Keepalive timeout in milliseconds                                | "300000"                        |
 | `configmap.app.template_file`               | Application template file                                        | "/etc/calert/message.tmpl"      |
+| `configmap.app.max_size`                    | Maximum size of a single push to the webhook URL                 | 4000                            |
 | `configmap.app.http_client.max_idle_conns`  | Client max idele connections                                     | "100"                           |
 | `configmap.app.http_client.request_timeout` | Client request timeout in milliseconds                           | "8000"                          |
 | `configmap.rooms`                           | List of webhooks to send to. See `calert_values.yaml` above      | [app.chat.alertManagerTestRoom] |
