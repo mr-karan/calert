@@ -79,21 +79,26 @@ func handleNewAlert(a *App, w http.ResponseWriter, r *http.Request) (code int, m
 		alertData = alerttemplate.Data{}
 		n         = a.notifier
 	)
+	// decode request payload from Alertmanager in a struct
+	if err := json.NewDecoder(r.Body).Decode(&alertData); err != nil {
+		errMsg := fmt.Sprintf("Error while decoding alertmanager response: %s", err)
+		return http.StatusBadRequest, errMsg, nil, excepBadRequest, err
+	}
 	// fetch the room_name param. This room_name is used to map the webhook URL from the config.
 	// just an abstraction, for a more humanised version and to not end up making alertmanager config
 	// a mess by not flooding with google chat webhook URLs all over the place.
 	roomName := r.URL.Query().Get("room_name")
 	if roomName == "" {
-		return http.StatusBadRequest, "Missing required room_name param", nil, excepBadRequest, err
+		// try2
+		roomName = alertData.Alerts[0].Labels["room_name"]
+		//fmt.Printf("alertData.Alerts : %+v\n", alertData.Alerts[0].Labels["room_name"])
+		if roomName == "" {
+			return http.StatusBadRequest, "Missing required room_name param", nil, excepBadRequest, err
+		}
 	}
 	webHookURL := viper.GetString(fmt.Sprintf("app.chat.%s.notification_url", roomName))
 	if webHookURL == "" {
 		errMsg := fmt.Sprintf("Webhook URL not configured for room_name: %s", roomName)
-		return http.StatusBadRequest, errMsg, nil, excepBadRequest, err
-	}
-	// decode request payload from Alertmanager in a struct
-	if err := json.NewDecoder(r.Body).Decode(&alertData); err != nil {
-		errMsg := fmt.Sprintf("Error while decoding alertmanager response: %s", err)
 		return http.StatusBadRequest, errMsg, nil, excepBadRequest, err
 	}
 	// send notification to chat
