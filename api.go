@@ -89,9 +89,8 @@ func handleNewAlert(a *App, w http.ResponseWriter, r *http.Request) (code int, m
 	// a mess by not flooding with google chat webhook URLs all over the place.
 	roomName := r.URL.Query().Get("room_name")
 	if roomName == "" {
-		// try2
+		// Attempt to fetch the room name from the alert payload
 		roomName = alertData.Alerts[0].Labels["room_name"]
-		//fmt.Printf("alertData.Alerts : %+v\n", alertData.Alerts[0].Labels["room_name"])
 		if roomName == "" {
 			return http.StatusBadRequest, "Missing required room_name param", nil, excepBadRequest, err
 		}
