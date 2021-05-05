@@ -12,7 +12,7 @@ write_timeout=5000
 keepalive_timeout=300000
 
 [app]
-template_file = "message.tmpl"
+template_file = "/etc/calert/message.tmpl"
 max_size = 4000
 
 [app.http_client]
