@@ -20,6 +20,8 @@ archives:
       - config.sample.toml
       - README.md
       - LICENSE
+      - message.tmpl
+
 dockers:
   # You can have multiple Docker images.
   -
@@ -54,3 +56,4 @@ dockers:
     # and use wildcards when you `COPY`/`ADD` in your Dockerfile.
     extra_files:
     - config.sample.toml
+    - message.tmpl
