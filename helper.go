@@ -16,8 +16,9 @@ func sendMessageToChat(alerts []alerttemplate.Alert, notif *Notifier, webHookURL
 	)
 	// common funcs used in template
 	templateFuncMap := template.FuncMap{
-		"Title":   strings.Title,
-		"toUpper": strings.ToUpper,
+		"Title":    strings.Title,
+		"toUpper":  strings.ToUpper,
+		"Contains": strings.Contains,
 	}
 	// read template file
 	tmpl, err := template.New("message.tmpl").Funcs(templateFuncMap).ParseFiles(viper.GetString("app.template_file"))
