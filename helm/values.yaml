@@ -18,6 +18,7 @@ configmap:
     http_client:
       max_idle_conns: "100"
       request_timeout: "8000"
+      proxy_url: "http://internal-squid-proxy.com:3128"
   rooms: |
 
     [app.chat.alertManagerTestRoom]

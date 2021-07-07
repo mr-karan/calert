@@ -30,6 +30,7 @@ data:
     [app.http_client]
     max_idle_conns = {{ .Values.configmap.app.http_client.max_idle_conns }}
     request_timeout = {{ .Values.configmap.app.http_client.request_timeout }}
+    proxy_url = {{ .Values.configmap.app.http_client.proxy_url }}
 
     {{- with .Values.configmap.rooms }}
     {{ tpl . $ | indent 4 }}
