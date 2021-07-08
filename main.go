@@ -106,7 +106,7 @@ func initClient() *http.Client {
 
 		proxyURL, err := url.Parse(proxyURLString)
 		if err != nil {
-			errLog.Fatalf("Error enter proxy_url: %s", err)
+			errLog.Fatalf("Unable to parse `proxy_url`: %s", err)
 		}
 
 		transport.Proxy = http.ProxyURL(proxyURL)

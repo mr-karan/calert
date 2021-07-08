@@ -17,7 +17,7 @@ template_file = "message.tmpl"
 [app.http_client]
 max_idle_conns =  100
 request_timeout = 8000
-proxy_url = "http://115.124.92.42:8080"
+proxy_url = "http://internal-squid-proxy.com:3128"
 
 [app.chat.alertManagerTestRoom]
 notification_url = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=abc-xyz&token=token-unique-key%3D"
