@@ -41,7 +41,9 @@ type Handler struct {
 func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	code, msg, data, et, err := h.HandleRequest(h.App, w, r)
 	if et != "" {
-		errLog.Printf("Error while processing request: %s", err)
+		if err != nil {
+			errLog.Printf("Error while processing request: %s", err)
+		}
 		sendErrorEnvelope(w, code, msg, data, et)
 	} else {
 		sendEnvelope(w, code, msg, data)
