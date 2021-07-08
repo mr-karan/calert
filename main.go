@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -72,6 +73,7 @@ func initConfig() {
 	viper.SetDefault("server.read_timeout", 1000)
 	viper.SetDefault("server.write_timeout", 5000)
 	viper.SetDefault("server.keepalive_timeout", 30000)
+	viper.SetDefault("app.http_client.proxy_url", "")
 	viper.SetDefault("app.max_size", 4000)
 	// Process flags.
 	flagSet.Parse(os.Args[1:])
@@ -94,13 +96,29 @@ func initConfig() {
 }
 
 func initClient() *http.Client {
+
+	transport := &http.Transport{
+		MaxIdleConnsPerHost:   viper.GetInt("app.http_client.max_idle_conns"),
+		ResponseHeaderTimeout: time.Duration(viper.GetDuration("app.http_client.request_timeout") * time.Millisecond),
+	}
+
+	proxyURLString := viper.GetString("app.http_client.proxy_url")
+
+	if proxyURLString != "" {
+
+		proxyURL, err := url.Parse(proxyURLString)
+		if err != nil {
+			errLog.Fatalf("Unable to parse `proxy_url`: %s", err)
+		}
+
+		transport.Proxy = http.ProxyURL(proxyURL)
+	}
+
 	// Generic HTTP handler for communicating with the Chat webhook endpoint.
 	return &http.Client{
-		Timeout: time.Duration(viper.GetDuration("app.http_client.request_timeout") * time.Millisecond),
-		Transport: &http.Transport{
-			MaxIdleConnsPerHost:   viper.GetInt("app.http_client.max_idle_conns"),
-			ResponseHeaderTimeout: time.Duration(viper.GetDuration("app.http_client.request_timeout") * time.Millisecond),
-		}}
+		Timeout:   time.Duration(viper.GetDuration("app.http_client.request_timeout") * time.Millisecond),
+		Transport: transport}
+
 }
 
 // prog initialisation.
