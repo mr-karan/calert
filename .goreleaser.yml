@@ -32,8 +32,7 @@ dockers:
     # GOARM of the built binary that should be used.
     goarm: ''
     # Name templates of the built binaries that should be used.
-    binaries:
-    - calert
+    id: calert
     # Templates of the Docker image names.
     image_templates:
     - "mrkaran/calert:latest"
