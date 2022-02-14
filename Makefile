@@ -1,32 +1,21 @@
-.PHONY : build prod run fresh test clean docker-build docker-push
+APP-BIN := ./bin/calerts.bin
 
-BIN := calert.bin
+LAST_COMMIT := $(shell git rev-parse --short HEAD)
+LAST_COMMIT_DATE := $(shell git show -s --format=%ci ${LAST_COMMIT})
+VERSION := $(shell git describe --tags)
+BUILDSTR := ${VERSION} (Commit: ${LAST_COMMIT_DATE} (${LAST_COMMIT}), Build: $(shell date +"%Y-%m-%d% %H:%M:%S %z"))
 
-HASH := $(shell git rev-parse --short HEAD)
-COMMIT_DATE := $(shell git show -s --format=%ci ${HASH})
-BUILD_DATE := $(shell date '+%Y-%m-%d %H:%M:%S')
-VERSION := ${HASH} (${COMMIT_DATE})
-CALERT_IMAGE := mrkaran/calert
-CALERT_TAG := 1.1.0
+.PHONY: build
+build: ## Build binary.
+	go build -o ${APP-BIN} -ldflags="-X 'main.buildString=${BUILDSTR}'" ./cmd/
 
-docker-build:
-	docker build -t ${CALERT_IMAGE}:latest -t ${CALERT_IMAGE}:${CALERT_TAG} -f docker/Dockerfile .
+.PHONY: run
+run: ## Run binary.
+	./${APP-BIN}
 
-docker-push:
-	docker push ${CALERT_IMAGE}:latest
-	docker push ${CALERT_IMAGE}:${CALERT_TAG}
+.PHONY: fresh
+fresh: build run
 
-build:
-	go build -o ${BIN} -ldflags="-X 'main.version=${VERSION}' -X 'main.date=${BUILD_DATE}'"
-
-run:
-	./${BIN}
-
-fresh: clean build run
-
-test:
-	go test
-
-clean:
-	go clean
-	rm -f ${BIN}
+.PHONY: lint
+lint:
+	docker run --rm -v $(pwd):/app -w /app golangci/golangci-lint:v1.43.0 golangci-lint run -v

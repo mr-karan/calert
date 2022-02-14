@@ -25,7 +25,6 @@
     -   [API Usage](#api-usage)
     -   [Setting up Prometheus](#setting-up-prometheus)
 
--   [Ansible Playbook](#ansible-playbook)
 
 ## Getting Started (Quickstart)
 
@@ -137,10 +136,6 @@ _`room_name`_ param is required. The same `room_name` should be present in `app.
 -   Alertmanager has the ability of group similar alerts together and fire only one event, clubbing all the alerts data into one event. `calert` leverages this and sends all alerts in one message by looping over the alerts and passing data in the template. You can configure the rules for grouping the alerts in `alertmanager.yml` config. You can read more about it [here](https://github.com/prometheus/docs/blob/master/content/docs/alerting/alertmanager.md#grouping).
 
 *   Configure Alertmanager config file (`alertmanager.yml`) and give the address of calert web-server. You can refer to the [official documentation](https://prometheus.io/docs/alerting/configuration/#webhook_config) for more details.
-
-## Ansible Playbook
-
--   You can refer to the `calert` [role](https://github.com/mr-karan/ansible-server-logs-monitoring/tree/master/roles/calert) in my [Ansible Server Logs-Monitoring](https://github.com/mr-karan/ansible-server-logs-monitoring/) playbook.
 
 ## Contribution
 
