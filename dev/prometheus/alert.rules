@@ -1,0 +1,28 @@
+groups:
+- name: dummy
+  rules:
+  - alert: DeadManSwitch
+    expr: vector(1)==1
+    for: 10s
+    labels:
+      severity: deadman
+      room: dev-ops-alerts
+    annotations:
+      title: "This is a dummy alert"
+      description: This is a DeadMansSwitch meant to ensure that the entire Alerting
+      summary: Consider running `htop` and check the processes consuming max RAM.
+      severity: "{{ $labels.severity }}"
+      instance: "{{ $labels.instance }}"
+
+  - alert: DeadManAnotherSwitch
+    expr: vector(2)==2
+    for: 10s
+    labels:
+      severity: deadman
+      room: dev-ops-alerts
+    annotations:
+      title: "This is a dummy alert"
+      description: This is a DeadMansSwitch meant to ensure that the entire Alerting
+      summary: Consider running `htop` and check the processes consuming max RAM.
+      severity: "{{ $labels.severity }}"
+      instance: "{{ $labels.instance }}"

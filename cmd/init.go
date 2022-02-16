@@ -15,7 +15,7 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
-// initLogger initializes logger.
+// initLogger initializes logger instance.
 func initLogger(ko *koanf.Koanf) *logrus.Logger {
 	logger := logrus.New()
 	logger.SetFormatter(&logrus.TextFormatter{
@@ -28,8 +28,7 @@ func initLogger(ko *koanf.Koanf) *logrus.Logger {
 	return logger
 }
 
-// initConfig loads config to `ko`
-// object.
+// initConfig loads config to `ko` object.
 func initConfig(cfgDefault string, envPrefix string) (*koanf.Koanf, error) {
 	var (
 		ko = koanf.New(".")
@@ -72,33 +71,51 @@ func initConfig(cfgDefault string, envPrefix string) (*koanf.Koanf, error) {
 	return ko, nil
 }
 
-func initProviders(ko *koanf.Koanf) ([]prvs.Provider, error) {
+// initProviders loads all the providers specified in the config.
+func initProviders(ko *koanf.Koanf, lo *logrus.Logger) []prvs.Provider {
 	provs := make([]prvs.Provider, 0)
 
-	for _, prov := range ko.Slices("notifier.providers") {
-		switch prov.String("type") {
+	// Load all providers.
+	for _, name := range ko.MapKeys("providers") {
+		cfgKey := fmt.Sprintf("providers.%s", name)
+
+		provType := ko.String(fmt.Sprintf("%s.type", cfgKey))
+
+		switch provType {
 		case "google_chat":
-			gchat, err := prvs.NewGoogleChat(prov.String("endpoint"))
+			gchat, err := prvs.NewGoogleChat(
+				prvs.GoogleChatOpts{
+					Timeout:     ko.MustDuration(fmt.Sprintf("%s.timeout", cfgKey)),
+					MaxIdleConn: ko.MustInt(fmt.Sprintf("%s.max_idle_conns", cfgKey)),
+					ProxyURL:    ko.String(fmt.Sprintf("%s.proxy_url", cfgKey)),
+					Endpoint:    ko.String(fmt.Sprintf("%s.endpoint", cfgKey)),
+					Room:        name,
+				},
+			)
 			if err != nil {
-				return nil, err
+				lo.WithError(err).Fatal("error initialising google chat provider")
 			}
+			lo.WithField("room", gchat.GetRoom()).Info("initialised provider")
 			provs = append(provs, gchat)
 		}
 	}
-	return provs, nil
+
+	if len(provs) == 0 {
+		lo.Fatal("no providers initialised. please check config")
+	}
+
+	return provs
 }
 
 // initNotifier initializes a Notifier instance.
-func initNotifier(ko *koanf.Koanf, provs []prvs.Provider) (notifier.Notifier, error) {
-	notify, err := notifier.Init(notifier.Opts{
-		Timeout:     ko.MustDuration("notifier.timeout"),
-		MaxIdleConn: ko.MustInt("notifier.max_idle_conns"),
-		ProxyURL:    ko.String("notifier.proxy_url"),
-		Providers:   provs,
+func initNotifier(ko *koanf.Koanf, lo *logrus.Logger, provs []prvs.Provider) notifier.Notifier {
+	n, err := notifier.Init(notifier.Opts{
+		Providers: provs,
+		Log:       lo,
 	})
 	if err != nil {
-		return notifier.Notifier{}, err
+		lo.WithError(err).Fatal("error initialising notifier")
 	}
 
-	return notify, nil
+	return n
 }

@@ -2,79 +2,56 @@ package notifier
 
 import (
 	"fmt"
-	"net/http"
-	"net/url"
-	"time"
 
 	"github.com/mr-karan/calert/internal/providers"
+	alertmgrtmpl "github.com/prometheus/alertmanager/template"
+	"github.com/sirupsen/logrus"
 )
 
 // Notifier represents an instance that pushes out notifications to
 // upstream providers.
 type Notifier struct {
-	client    *http.Client
-	providers []providers.Provider
+	providers map[string]providers.Provider
+	lo        *logrus.Logger
 }
 
 type Opts struct {
-	MaxIdleConn int
-	Timeout     time.Duration
-	ProxyURL    string
-	Providers   []providers.Provider
+	Providers []providers.Provider
+	Log       *logrus.Logger
 }
 
 // Init initialises a new instance of the Notifier.
 func Init(opts Opts) (Notifier, error) {
-	transport := &http.Transport{
-		MaxIdleConnsPerHost: opts.MaxIdleConn,
-	}
+	// Initialise a map with room as the key and their corresponding providers.
+	m := make(map[string]providers.Provider, 0)
 
-	if opts.ProxyURL != "" {
-		u, err := url.Parse(opts.ProxyURL)
-		if err != nil {
-			return Notifier{}, fmt.Errorf("error parsing proxy URL: %s", err)
-		}
-		transport.Proxy = http.ProxyURL(u)
-	}
-
-	// Generic HTTP Client for communicating with the upstream provider endpoint.
-	client := &http.Client{
-		Timeout:   opts.Timeout,
-		Transport: transport,
+	for _, prov := range opts.Providers {
+		m[prov.GetRoom()] = prov
 	}
 
 	return Notifier{
-		client:    client,
-		providers: opts.Providers,
+		lo:        opts.Log,
+		providers: m,
 	}, nil
 }
 
 // Dispatch pushes out a notification to Google Chat Room.
-// func (n *Notifier) Dispatch(notif interface{}) error {
-// 	out, err := json.Marshal(notif)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	// prepare POST request to webhook endpoint
-// 	req, err := http.NewRequest("POST", webHookURL, bytes.NewBuffer(out))
-// 	if err != nil {
-// 		return err
-// 	}
-// 	req.Header.Set("Content-Type", "application/json")
+func (n *Notifier) Dispatch(alerts []alertmgrtmpl.Alert) error {
+	// Group alerts based on their room names.
+	alertsByRoom := make(map[string][]alertmgrtmpl.Alert, 0)
 
-// 	// send the request
-// 	resp, err := n.httpClient.Do(req)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer resp.Body.Close()
+	n.lo.WithField("alerts_len", len(alerts)).Info("dispatching alerts")
 
-// 	// if response is not 200 log error response from gchat
-// 	if resp.StatusCode != http.StatusOK {
-// 		respMsg, _ := ioutil.ReadAll(resp.Body)
-// 		errLog.Printf("Error sending alert Webhook API error: %s", string(respMsg))
-// 		return errors.New("Error while sending alert")
-// 	}
-
-// 	return nil
-// }
+	for _, a := range alerts {
+		room := a.Labels["room"]
+		alertsByRoom[room] = append(alertsByRoom[room], a)
+	}
+	// For each room, dispatch the alert based on their provider.
+	for k, v := range alertsByRoom {
+		// Do a lookup for the provider by the room name and push the alerts.
+		// TODO: Check if the key is here.
+		fmt.Println(k, v)
+		// n.providers[k].Push(v)
+	}
+	return nil
+}

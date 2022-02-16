@@ -13,9 +13,24 @@ build: ## Build binary.
 run: ## Run binary.
 	./${APP-BIN}
 
+.PHONY: clean
+clean: ## Remove temporary files and the `bin` folder.
+	rm -rf bin
+
 .PHONY: fresh
 fresh: build run
 
 .PHONY: lint
 lint:
 	docker run --rm -v $(pwd):/app -w /app golangci/golangci-lint:v1.43.0 golangci-lint run -v
+
+.PHONY: dev-docker
+dev-docker: clean build ## Build and spawns docker containers for the entire suite (Alertmanager/Prometheus/cAlert).
+	cd dev; \
+	docker-compose build ; \
+	CURRENT_UID=$(id -u):$(id -g) docker-compose up
+
+.PHONY: rm-dev-docker
+rm-dev-docker: clean build ## Delete the docker containers including volumes.
+	cd dev; \
+	docker-compose down -v ; \

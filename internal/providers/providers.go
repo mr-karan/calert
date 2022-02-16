@@ -1,8 +1,14 @@
 package providers
 
+import (
+	alertmgrtmpl "github.com/prometheus/alertmanager/template"
+)
+
 type Provider interface {
 	// ID represents the name of provider.
 	ID() string
+	// Room returns the room name specified for the provider.
+	GetRoom() string
 	// Push pushes the notification to upstream provider.
-	Push(notif interface{}) error
+	Push(alerts []alertmgrtmpl.Alert) error
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+
+	alertmgrtmpl "github.com/prometheus/alertmanager/template"
 )
 
 // wrap is a middleware that wraps HTTP handlers and injects the "app" context.
@@ -55,36 +57,17 @@ func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	sendResponse(w, "pong")
 }
 
-// func handleNewAlert(a *App, w http.ResponseWriter, r *http.Request) (code int, msg string, data interface{}, et ErrorType, err error) {
-// 	var (
-// 		alertData = alerttemplate.Data{}
-// 		n         = a.notifier
-// 	)
-// 	// decode request payload from Alertmanager in a struct
-// 	if err := json.NewDecoder(r.Body).Decode(&alertData); err != nil {
-// 		errMsg := fmt.Sprintf("Error while decoding alertmanager response: %s", err)
-// 		return http.StatusBadRequest, errMsg, nil, excepBadRequest, err
-// 	}
-// 	// fetch the room_name param. This room_name is used to map the webhook URL from the config.
-// 	// just an abstraction, for a more humanised version and to not end up making alertmanager config
-// 	// a mess by not flooding with google chat webhook URLs all over the place.
-// 	roomName := r.URL.Query().Get("room_name")
-// 	if roomName == "" {
-// 		// Attempt to fetch the room name from the alert payload
-// 		roomName = alertData.Alerts[0].Labels["room_name"]
-// 		if roomName == "" {
-// 			return http.StatusBadRequest, "Missing required room_name param", nil, excepBadRequest, err
-// 		}
-// 	}
-// 	webHookURL := viper.GetString(fmt.Sprintf("app.chat.%s.notification_url", roomName))
-// 	if webHookURL == "" {
-// 		errMsg := fmt.Sprintf("Webhook URL not configured for room_name: %s", roomName)
-// 		return http.StatusBadRequest, errMsg, nil, excepBadRequest, err
-// 	}
-// 	// send notification to chat
-// 	err = sendMessageToChat(alertData.Alerts, &n, webHookURL)
-// 	if err != nil {
-// 		return http.StatusInternalServerError, "Something went wrong while sending alert notification", nil, excepGeneral, err
-// 	}
-// 	return http.StatusOK, "Alert sent", nil, "", nil
-// }
+func handleDispatchNotif(w http.ResponseWriter, r *http.Request) {
+	var (
+		app     = r.Context().Value("app").(*App)
+		payload = alertmgrtmpl.Data{}
+	)
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		app.lo.WithError(err).Error("error decoding request body")
+		sendErrorResponse(w, "Error decoding payload.", http.StatusBadRequest, nil)
+		return
+	}
+	app.notifier.Dispatch(payload.Alerts)
+
+	sendResponse(w, "dispatched!")
+}

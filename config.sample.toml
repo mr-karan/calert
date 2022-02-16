@@ -3,16 +3,18 @@ template_file = "/etc/calert/message.tmpl"
 max_size = 4000
 address = "0.0.0.0:6000"
 server_timeout = "5s"
+enable_request_logs = true
 
-[notifier]
+[providers.prod_alerts]
+endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=abc-xyz&token=token-unique-key%3D"
+type = "google_chat"
 max_idle_conns =  50
 timeout = "7s"
 proxy_url = "http://internal-squid-proxy.com:3128"
 
-[[notifier.providers]]
+[providers.dev_alerts]
 endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=abc-xyz&token=token-unique-key%3D"
-type = "gchat"
-
-[[notifier.providers]]
-endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=abc-xyz&token=token-unique-key%3D"
-type = "gchat"
+type = "google_chat"
+max_idle_conns =  50
+timeout = "7s"
+proxy_url = "http://internal-squid-proxy.com:3128"
