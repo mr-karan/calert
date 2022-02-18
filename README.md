@@ -22,17 +22,17 @@ To run:
 
 ### Docker
 
-You can find the list of docker images on [Dockerhub](https://hub.docker.com/r/mrkaran/calert)
+You can find the list of docker images [here](https://github.com/mr-karan/calert/pkgs/container/calert)
 
 ```
-docker pull ghcr.io/mr-karan/nomad-events-sink:latest
+docker pull ghcr.io/mr-karan/calert:latest
 ```
 
 Here's an example `docker-compose` config with a custom `message.tmpl` mounted inside the container:
 
 ```yml
   calert:
-    image: mrkaran/calert:latest
+    image: ghcr.io/mr-karan/calert:latest
     ports:
       - "6000:6000"
     volumes:
