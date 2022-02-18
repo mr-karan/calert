@@ -7,7 +7,7 @@
             "labels": {
                 "alertname": "DeadManAnotherSwitch",
                 "monitor": "docker-host-alpha",
-                "room": "dev-ops-alerts",
+                "room": "dev_alerts",
                 "severity": "deadman"
             },
             "annotations": {
@@ -27,7 +27,7 @@
             "labels": {
                 "alertname": "DeadManSwitch",
                 "monitor": "docker-host-alpha",
-                "room": "dev-ops-alerts",
+                "room": "dev_alerts",
                 "severity": "deadman"
             },
             "annotations": {
@@ -44,11 +44,11 @@
         }
     ],
     "groupLabels": {
-        "room": "dev-ops-alerts"
+        "room": "dev_alerts"
     },
     "commonLabels": {
         "monitor": "docker-host-alpha",
-        "room": "dev-ops-alerts",
+        "room": "dev_alerts",
         "severity": "deadman"
     },
     "commonAnnotations": {

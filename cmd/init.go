@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/knadh/koanf"
 	"github.com/knadh/koanf/parsers/toml"
@@ -85,18 +86,20 @@ func initProviders(ko *koanf.Koanf, lo *logrus.Logger) []prvs.Provider {
 		case "google_chat":
 			gchat, err := prvs.NewGoogleChat(
 				prvs.GoogleChatOpts{
-					Log:         lo,
-					Timeout:     ko.MustDuration(fmt.Sprintf("%s.timeout", cfgKey)),
-					MaxIdleConn: ko.MustInt(fmt.Sprintf("%s.max_idle_conns", cfgKey)),
-					ProxyURL:    ko.String(fmt.Sprintf("%s.proxy_url", cfgKey)),
-					Endpoint:    ko.String(fmt.Sprintf("%s.endpoint", cfgKey)),
-					Room:        name,
-					Template:    ko.String(fmt.Sprintf("%s.template", cfgKey)),
+					Log:             lo,
+					Timeout:         ko.MustDuration(fmt.Sprintf("%s.timeout", cfgKey)),
+					MaxIdleConn:     ko.MustInt(fmt.Sprintf("%s.max_idle_conns", cfgKey)),
+					ProxyURL:        ko.String(fmt.Sprintf("%s.proxy_url", cfgKey)),
+					Endpoint:        ko.MustString(fmt.Sprintf("%s.endpoint", cfgKey)),
+					Room:            name,
+					Template:        ko.MustString(fmt.Sprintf("%s.template", cfgKey)),
+					ActiveAlertsTTL: ko.MustDuration(fmt.Sprintf("%s.active_alerts_ttl", cfgKey)),
 				},
 			)
 			if err != nil {
 				lo.WithError(err).Fatal("error initialising google chat provider")
 			}
+			go gchat.InitPruner(1 * time.Hour)
 			lo.WithField("room", gchat.GetRoom()).Info("initialised provider")
 			provs = append(provs, gchat)
 		}

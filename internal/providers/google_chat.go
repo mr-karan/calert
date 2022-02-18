@@ -71,8 +71,8 @@ func (d *ActiveAlerts) remove(fingerprint string) {
 
 // loookup retrievs the UUID for the alert based on the fingerprint.
 func (d *ActiveAlerts) loookup(fingerprint string) string {
-	d.Lock()
-	defer d.Unlock()
+	d.RLock()
+	defer d.RUnlock()
 	// Do a lookup for the provider by the room name and push the alerts.
 	if _, ok := d.alerts[fingerprint]; !ok {
 		return ""
@@ -83,21 +83,23 @@ func (d *ActiveAlerts) loookup(fingerprint string) string {
 // GoogleChatManager represents the various methods for interacting with Google Chat.
 type GoogleChatManager struct {
 	lo           *logrus.Logger
-	activeAlerts ActiveAlerts
+	activeAlerts *ActiveAlerts
 	endpoint     string
 	room         string
 	client       *http.Client
 	msgTmpl      *template.Template
+	ttl          time.Duration
 }
 
 type GoogleChatOpts struct {
-	Log         *logrus.Logger
-	MaxIdleConn int
-	Timeout     time.Duration
-	ProxyURL    string
-	Endpoint    string
-	Room        string
-	Template    string
+	Log             *logrus.Logger
+	MaxIdleConn     int
+	Timeout         time.Duration
+	ProxyURL        string
+	Endpoint        string
+	Room            string
+	Template        string
+	ActiveAlertsTTL time.Duration
 }
 
 // NewGoogleChat initializes a Google Chat provider object.
@@ -153,8 +155,9 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 		client:       client,
 		endpoint:     opts.Endpoint,
 		room:         opts.Room,
-		activeAlerts: a,
+		activeAlerts: &a,
 		msgTmpl:      tmpl,
+		ttl:          opts.ActiveAlertsTTL,
 	}, nil
 }
 
@@ -259,4 +262,28 @@ func (m *GoogleChatManager) sendMessage(msg ChatMessage, threadKey string) error
 	}
 
 	return nil
+}
+
+// InitPruner is used to remove active alerts in the
+// map once their TTL is reached. The cleanup activity
+// happens at periodic intervals.
+// This is a blocking function
+// so the caller must invoke as a goroutine.
+func (m *GoogleChatManager) InitPruner(pruneInterval time.Duration) {
+	var (
+		evalTicker = time.NewTicker(pruneInterval).C
+	)
+	for range evalTicker {
+		// m.lo.Info("locking map")
+		now := time.Now()
+		expired := now.Add(-m.ttl)
+		m.lo.Info("pruning active alerts based on ttl")
+		for k, a := range m.activeAlerts.alerts {
+			fmt.Println("looping in prune", k, expired, a.StartsAt)
+			if a.StartsAt.Before(expired) {
+				m.lo.WithField("fingerprint", k).WithField("created", a.StartsAt).WithField("expired", expired).Info("removing alert from active alerts")
+				m.activeAlerts.remove(k)
+			}
+		}
+	}
 }
