@@ -20,11 +20,12 @@ type Opts struct {
 
 // Init initialises a new instance of the Notifier.
 func Init(opts Opts) (Notifier, error) {
-	// Initialise a map with room as the key and their corresponding providers.
+	// Initialise a map with room as the key and their corresponding provider instance.
 	m := make(map[string]providers.Provider, 0)
 
 	for _, prov := range opts.Providers {
-		m[prov.GetRoom()] = prov
+		room := prov.GetRoom()
+		m[room] = prov
 	}
 
 	return Notifier{
@@ -33,25 +34,27 @@ func Init(opts Opts) (Notifier, error) {
 	}, nil
 }
 
-// Dispatch pushes out a notification to Google Chat Room.
+// Dispatch pushes out a notification to an upstream provider.
 func (n *Notifier) Dispatch(alerts []alertmgrtmpl.Alert) error {
+	n.lo.WithField("count", len(alerts)).Info("dispatching alerts")
+
 	// Group alerts based on their room names.
 	alertsByRoom := make(map[string][]alertmgrtmpl.Alert, 0)
-
-	n.lo.WithField("alerts_len", len(alerts)).Info("dispatching alerts")
-
 	for _, a := range alerts {
 		room := a.Labels["room"]
 		alertsByRoom[room] = append(alertsByRoom[room], a)
 	}
+
 	// For each room, dispatch the alert based on their provider.
 	for k, v := range alertsByRoom {
-		// Do a lookup for the provider by the room name and push the alerts.
+		// Lookup for the provider by the room name.
 		if _, ok := n.providers[k]; !ok {
 			n.lo.WithField("room", k).Warn("no provider available for room")
 			continue
 		}
+		// Push the batch of alerts.
 		n.providers[k].Push(v)
 	}
+
 	return nil
 }

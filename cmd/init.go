@@ -12,6 +12,7 @@ import (
 	"github.com/knadh/koanf/providers/file"
 	"github.com/mr-karan/calert/internal/notifier"
 	prvs "github.com/mr-karan/calert/internal/providers"
+	"github.com/mr-karan/calert/internal/providers/google_chat"
 	"github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
 )
@@ -19,13 +20,17 @@ import (
 // initLogger initializes logger instance.
 func initLogger(ko *koanf.Koanf) *logrus.Logger {
 	logger := logrus.New()
+
 	logger.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp:          true,
 		DisableLevelTruncation: true,
 	})
+
+	// Enable debug mode if specified.
 	if ko.String("app.log") == "debug" {
 		logger.SetLevel(logrus.DebugLevel)
 	}
+
 	return logger
 }
 
@@ -76,16 +81,15 @@ func initConfig(cfgDefault string, envPrefix string) (*koanf.Koanf, error) {
 func initProviders(ko *koanf.Koanf, lo *logrus.Logger) []prvs.Provider {
 	provs := make([]prvs.Provider, 0)
 
-	// Load all providers.
+	// Loop over all providers listed in config.
 	for _, name := range ko.MapKeys("providers") {
 		cfgKey := fmt.Sprintf("providers.%s", name)
-
 		provType := ko.String(fmt.Sprintf("%s.type", cfgKey))
 
 		switch provType {
 		case "google_chat":
-			gchat, err := prvs.NewGoogleChat(
-				prvs.GoogleChatOpts{
+			gchat, err := google_chat.NewGoogleChat(
+				google_chat.GoogleChatOpts{
 					Log:             lo,
 					Timeout:         ko.MustDuration(fmt.Sprintf("%s.timeout", cfgKey)),
 					MaxIdleConn:     ko.MustInt(fmt.Sprintf("%s.max_idle_conns", cfgKey)),
@@ -99,14 +103,17 @@ func initProviders(ko *koanf.Koanf, lo *logrus.Logger) []prvs.Provider {
 			if err != nil {
 				lo.WithError(err).Fatal("error initialising google chat provider")
 			}
+
+			// Start a background worker to cleanup alerts based on TTL mechanism.
 			go gchat.InitPruner(1 * time.Hour)
+
 			lo.WithField("room", gchat.GetRoom()).Info("initialised provider")
 			provs = append(provs, gchat)
 		}
 	}
 
 	if len(provs) == 0 {
-		lo.Fatal("no providers initialised. please check config")
+		lo.Fatal("no providers listed in config")
 	}
 
 	return provs

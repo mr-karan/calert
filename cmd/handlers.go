@@ -49,25 +49,36 @@ func sendErrorResponse(w http.ResponseWriter, message string, code int, data int
 	w.Write(out)
 }
 
+// Index page.
 func handleIndex(w http.ResponseWriter, r *http.Request) {
 	sendResponse(w, "welcome to cAlerts!")
 }
 
+// Health check.
 func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	sendResponse(w, "pong")
 }
 
+// Handle dispatching new alerts to upstream providers.
 func handleDispatchNotif(w http.ResponseWriter, r *http.Request) {
 	var (
 		app     = r.Context().Value("app").(*App)
 		payload = alertmgrtmpl.Data{}
 	)
+
+	// Unmarshall POST Body.
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		app.lo.WithError(err).Error("error decoding request body")
 		sendErrorResponse(w, "Error decoding payload.", http.StatusBadRequest, nil)
 		return
 	}
-	app.notifier.Dispatch(payload.Alerts)
 
-	sendResponse(w, "dispatched!")
+	// Dispatch a list of alerts via Notifier.
+	if err := app.notifier.Dispatch(payload.Alerts); err != nil {
+		app.lo.WithError(err).Error("error dispatching alerts")
+		sendErrorResponse(w, "Error dispatching alerts.", http.StatusInternalServerError, nil)
+		return
+	}
+
+	sendResponse(w, "dispatched")
 }

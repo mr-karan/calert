@@ -4,7 +4,7 @@ max_size = 4000
 address = "0.0.0.0:6000"
 server_timeout = "5s"
 enable_request_logs = true
-log_level = "debug"
+log = "debug"
 
 [providers.prod_alerts]
 endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=key&token=token%3D"
