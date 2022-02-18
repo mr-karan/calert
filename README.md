@@ -43,7 +43,9 @@ Here's an example `docker-compose` config with a custom `message.tmpl` mounted i
 
 Refer to [config.sample.toml](./config.sample.toml) for instructions on how to configure `calert`.
 
-All the config variables can also be supplied as Environment Variables by prefixing `CALERT_` and replacing `.` with `__`. Example:
+All the config variables can also be supplied as Environment Variables by prefixing `CALERT_` and replacing `.` (_period_) with `__` (_double underscores_).
+
+Example:
 
 - `app.address` would become `CALERT_APP__ADDRESS`
 
@@ -118,7 +120,7 @@ Here's a list of internal app metrics available at `/metrics`:
 |  `calert_alerts_dispatched_total` 	| Number of alerts dispatched to upstream providers, grouped with labels like `provider` and `room`.  	| `counter` |
 |  `calert_alerts_dispatched_duration_seconds_{sum,count,bucket}` 	| Duration to send an alert to upstream provider.	| `histogram` |
 
-It also exposes Go process metrics in addition to app metrics, which you can use to monitor the performance of `calert.
+It also exposes Go process metrics in addition to app metrics, which you can use to monitor the performance of `calert`.
 
 ## v2 Migration
 
@@ -146,7 +148,6 @@ Here's an example of how the Prometheus Alert should look like (Notice the `labe
     description: This is a DeadMansSwitch meant to ensure that the entire alerting pipeline is functional.
     summary: Consider running `htop` and check the processes consuming max RAM.
     severity: "{{ $labels.severity }}"
-    instance: "{{ $labels.instance }}"
 ```
 
 ## Contribution
