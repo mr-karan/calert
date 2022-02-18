@@ -6,15 +6,17 @@ server_timeout = "5s"
 enable_request_logs = true
 
 [providers.prod_alerts]
-endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=abc-xyz&token=token-unique-key%3D"
+endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=key&token=token"
 type = "google_chat"
 max_idle_conns =  50
 timeout = "7s"
-proxy_url = "http://internal-squid-proxy.com:3128"
+# proxy_url = "http://internal-squid-proxy.com:3128"
+template = "static/message.tmpl"
 
 [providers.dev_alerts]
-endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=abc-xyz&token=token-unique-key%3D"
+endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=key&token=token"
 type = "google_chat"
 max_idle_conns =  50
 timeout = "7s"
-proxy_url = "http://internal-squid-proxy.com:3128"
+# proxy_url = "http://internal-squid-proxy.com:3128"
+template = "static/message.tmpl"

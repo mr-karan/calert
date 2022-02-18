@@ -85,11 +85,13 @@ func initProviders(ko *koanf.Koanf, lo *logrus.Logger) []prvs.Provider {
 		case "google_chat":
 			gchat, err := prvs.NewGoogleChat(
 				prvs.GoogleChatOpts{
+					Log:         lo,
 					Timeout:     ko.MustDuration(fmt.Sprintf("%s.timeout", cfgKey)),
 					MaxIdleConn: ko.MustInt(fmt.Sprintf("%s.max_idle_conns", cfgKey)),
 					ProxyURL:    ko.String(fmt.Sprintf("%s.proxy_url", cfgKey)),
 					Endpoint:    ko.String(fmt.Sprintf("%s.endpoint", cfgKey)),
 					Room:        name,
+					Template:    ko.String(fmt.Sprintf("%s.template", cfgKey)),
 				},
 			)
 			if err != nil {

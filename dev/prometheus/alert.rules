@@ -6,7 +6,7 @@ groups:
     for: 10s
     labels:
       severity: deadman
-      room: dev-ops-alerts
+      room: dev_alerts
     annotations:
       title: "This is a dummy alert"
       description: This is a DeadMansSwitch meant to ensure that the entire Alerting
@@ -19,7 +19,7 @@ groups:
     for: 10s
     labels:
       severity: deadman
-      room: dev-ops-alerts
+      room: prod_alerts
     annotations:
       title: "This is a dummy alert"
       description: This is a DeadMansSwitch meant to ensure that the entire Alerting

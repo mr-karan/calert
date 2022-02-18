@@ -1,8 +1,6 @@
 package notifier
 
 import (
-	"fmt"
-
 	"github.com/mr-karan/calert/internal/providers"
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
 	"github.com/sirupsen/logrus"
@@ -49,9 +47,11 @@ func (n *Notifier) Dispatch(alerts []alertmgrtmpl.Alert) error {
 	// For each room, dispatch the alert based on their provider.
 	for k, v := range alertsByRoom {
 		// Do a lookup for the provider by the room name and push the alerts.
-		// TODO: Check if the key is here.
-		fmt.Println(k, v)
-		// n.providers[k].Push(v)
+		if _, ok := n.providers[k]; !ok {
+			n.lo.WithField("room", k).Warn("no provider available for room")
+			continue
+		}
+		n.providers[k].Push(v)
 	}
 	return nil
 }

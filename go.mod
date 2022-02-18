@@ -2,6 +2,7 @@ module github.com/mr-karan/calert
 
 require (
 	github.com/go-chi/chi v1.5.4
+	github.com/gofrs/uuid v4.0.0+incompatible
 	github.com/knadh/koanf v1.4.0
 	github.com/prometheus/alertmanager v0.23.0
 	github.com/sirupsen/logrus v1.6.0
