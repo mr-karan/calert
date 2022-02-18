@@ -1,6 +1,7 @@
 module github.com/mr-karan/calert
 
 require (
+	github.com/VictoriaMetrics/metrics v1.18.1
 	github.com/go-chi/chi v1.5.4
 	github.com/gofrs/uuid v4.0.0+incompatible
 	github.com/knadh/koanf v1.4.0
@@ -27,6 +28,8 @@ require (
 	github.com/prometheus/procfs v0.6.0 // indirect
 	github.com/shurcooL/httpfs v0.0.0-20190707220628-8d4bc4ba7749 // indirect
 	github.com/shurcooL/vfsgen v0.0.0-20200824052919-0d455de96546 // indirect
+	github.com/valyala/fastrand v1.1.0 // indirect
+	github.com/valyala/histogram v1.2.0 // indirect
 	golang.org/x/sys v0.0.0-20220209214540-3681064d5158 // indirect
 	google.golang.org/protobuf v1.26.0-rc.1 // indirect
 )

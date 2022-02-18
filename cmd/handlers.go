@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
 )
@@ -51,24 +52,44 @@ func sendErrorResponse(w http.ResponseWriter, message string, code int, data int
 
 // Index page.
 func handleIndex(w http.ResponseWriter, r *http.Request) {
+	var (
+		app = r.Context().Value("app").(*App)
+	)
+	app.metrics.Increment(`http_requests_total{handler="index"}`)
 	sendResponse(w, "welcome to cAlerts!")
 }
 
 // Health check.
 func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
+	var (
+		app = r.Context().Value("app").(*App)
+	)
+	app.metrics.Increment(`http_requests_total{handler="ping"}`)
 	sendResponse(w, "pong")
+}
+
+// Export prometheus metrics.
+func handleMetrics(w http.ResponseWriter, r *http.Request) {
+	var (
+		app = r.Context().Value("app").(*App)
+	)
+	app.metrics.FlushMetrics(w)
 }
 
 // Handle dispatching new alerts to upstream providers.
 func handleDispatchNotif(w http.ResponseWriter, r *http.Request) {
 	var (
+		now     = time.Now()
 		app     = r.Context().Value("app").(*App)
 		payload = alertmgrtmpl.Data{}
 	)
 
+	app.metrics.Increment(`http_requests_total{handler="dispatch"}`)
+
 	// Unmarshall POST Body.
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		app.lo.WithError(err).Error("error decoding request body")
+		app.metrics.Increment(`http_request_errors_total{handler="dispatch"}`)
 		sendErrorResponse(w, "Error decoding payload.", http.StatusBadRequest, nil)
 		return
 	}
@@ -76,9 +97,12 @@ func handleDispatchNotif(w http.ResponseWriter, r *http.Request) {
 	// Dispatch a list of alerts via Notifier.
 	if err := app.notifier.Dispatch(payload.Alerts); err != nil {
 		app.lo.WithError(err).Error("error dispatching alerts")
+		app.metrics.Increment(`http_request_errors_total{handler="dispatch"}`)
 		sendErrorResponse(w, "Error dispatching alerts.", http.StatusInternalServerError, nil)
 		return
 	}
+
+	app.metrics.Duration(`http_request_duration_seconds{handler="dispatch"}`, now)
 
 	sendResponse(w, "dispatched")
 }

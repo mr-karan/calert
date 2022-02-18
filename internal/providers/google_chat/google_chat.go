@@ -8,12 +8,14 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/mr-karan/calert/internal/metrics"
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
 	"github.com/sirupsen/logrus"
 )
 
 type GoogleChatManager struct {
 	lo           *logrus.Logger
+	metrics      *metrics.Manager
 	activeAlerts *ActiveAlerts
 	endpoint     string
 	room         string
@@ -23,6 +25,7 @@ type GoogleChatManager struct {
 
 type GoogleChatOpts struct {
 	Log             *logrus.Logger
+	Metrics         *metrics.Manager
 	MaxIdleConn     int
 	Timeout         time.Duration
 	ProxyURL        string
@@ -71,11 +74,14 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 
 	mgr := &GoogleChatManager{
 		lo:       opts.Log,
+		metrics:  opts.Metrics,
 		client:   client,
 		endpoint: opts.Endpoint,
 		room:     opts.Room,
 		activeAlerts: &ActiveAlerts{
-			alerts: alerts,
+			alerts:  alerts,
+			lo:      opts.Log,
+			metrics: opts.Metrics,
 		},
 		msgTmpl: tmpl,
 	}
@@ -105,21 +111,29 @@ func (m *GoogleChatManager) Push(alerts []alertmgrtmpl.Alert) error {
 
 		// Dispatch an HTTP request for each message.
 		for _, msg := range msgs {
-			threadKey := m.activeAlerts.alerts[a.Fingerprint].UUID.String()
+			var (
+				threadKey = m.activeAlerts.alerts[a.Fingerprint].UUID.String()
+				now       = time.Now()
+			)
+
+			m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
 
 			// Send message to API.
 			if err := m.sendMessage(msg, threadKey); err != nil {
+				m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_errors_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
 				m.lo.WithError(err).Error("error sending message")
 				continue
 			}
+
+			m.metrics.Duration(fmt.Sprintf(`alerts_dispatched_duration_seconds{provider="%s", room="%s"}`, m.ID(), m.Room()), now)
 		}
 	}
 
 	return nil
 }
 
-// GetRoom returns the name of room for which this provider is configured.
-func (m *GoogleChatManager) GetRoom() string {
+// Room returns the name of room for which this provider is configured.
+func (m *GoogleChatManager) Room() string {
 	return m.room
 }
 

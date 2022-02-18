@@ -9,6 +9,7 @@ import (
 	"github.com/knadh/koanf/parsers/toml"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
+	"github.com/mr-karan/calert/internal/metrics"
 	"github.com/mr-karan/calert/internal/notifier"
 	prvs "github.com/mr-karan/calert/internal/providers"
 	"github.com/mr-karan/calert/internal/providers/google_chat"
@@ -77,7 +78,7 @@ func initConfig(cfgDefault string, envPrefix string) (*koanf.Koanf, error) {
 }
 
 // initProviders loads all the providers specified in the config.
-func initProviders(ko *koanf.Koanf, lo *logrus.Logger) []prvs.Provider {
+func initProviders(ko *koanf.Koanf, lo *logrus.Logger, metrics *metrics.Manager) []prvs.Provider {
 	provs := make([]prvs.Provider, 0)
 
 	// Loop over all providers listed in config.
@@ -97,13 +98,14 @@ func initProviders(ko *koanf.Koanf, lo *logrus.Logger) []prvs.Provider {
 					Room:            name,
 					Template:        ko.MustString(fmt.Sprintf("%s.template", cfgKey)),
 					ActiveAlertsTTL: ko.MustDuration(fmt.Sprintf("%s.active_alerts_ttl", cfgKey)),
+					Metrics:         metrics,
 				},
 			)
 			if err != nil {
 				lo.WithError(err).Fatal("error initialising google chat provider")
 			}
 
-			lo.WithField("room", gchat.GetRoom()).Info("initialised provider")
+			lo.WithField("room", gchat.Room()).Info("initialised provider")
 			provs = append(provs, gchat)
 		}
 	}
@@ -126,4 +128,9 @@ func initNotifier(ko *koanf.Koanf, lo *logrus.Logger, provs []prvs.Provider) not
 	}
 
 	return n
+}
+
+// initMetrics initializes a Metrics manager.
+func initMetrics() *metrics.Manager {
+	return metrics.New("calert")
 }

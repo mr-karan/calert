@@ -24,7 +24,7 @@ func Init(opts Opts) (Notifier, error) {
 	m := make(map[string]providers.Provider, 0)
 
 	for _, prov := range opts.Providers {
-		room := prov.GetRoom()
+		room := prov.Room()
 		m[room] = prov
 	}
 

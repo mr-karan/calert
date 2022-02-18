@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gofrs/uuid"
+	"github.com/mr-karan/calert/internal/metrics"
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
 	"github.com/sirupsen/logrus"
 )
@@ -12,7 +13,8 @@ import (
 // ActiveAlerts represents a map of alerts unique fingerprint hash
 // with their details.
 type ActiveAlerts struct {
-	lo *logrus.Logger
+	lo      *logrus.Logger
+	metrics *metrics.Manager
 	sync.RWMutex
 	alerts map[string]AlertDetails
 }
@@ -84,6 +86,8 @@ func (d *ActiveAlerts) Prune(ttl time.Duration) {
 			delete(d.alerts, k)
 		}
 	}
+
+	d.metrics.Duration(`alerts_prune_duration_seconds`, now)
 
 }
 

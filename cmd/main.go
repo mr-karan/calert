@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/mr-karan/calert/internal/metrics"
 	"github.com/mr-karan/calert/internal/notifier"
 
 	"github.com/sirupsen/logrus"
@@ -19,6 +20,7 @@ var (
 // instances of various objects used in the lifecyle of program.
 type App struct {
 	lo       *logrus.Logger
+	metrics  *metrics.Manager
 	notifier notifier.Notifier
 }
 
@@ -32,13 +34,15 @@ func main() {
 
 	var (
 		lo       = initLogger(ko)
-		provs    = initProviders(ko, lo)
+		metrics  = initMetrics()
+		provs    = initProviders(ko, lo, metrics)
 		notifier = initNotifier(ko, lo, provs)
 	)
 
 	app := &App{
 		lo:       lo,
 		notifier: notifier,
+		metrics:  metrics,
 	}
 
 	app.lo.WithField("version", buildString).Info("booting calerts")
@@ -55,6 +59,7 @@ func main() {
 	// Register Handlers
 	r.Get("/", wrap(app, handleIndex))
 	r.Get("/ping", wrap(app, handleHealthCheck))
+	r.Get("/metrics", wrap(app, handleMetrics))
 	r.Post("/dispatch", wrap(app, handleDispatchNotif))
 
 	// Start HTTP Server.
