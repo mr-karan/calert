@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/knadh/koanf"
 	"github.com/knadh/koanf/parsers/toml"
@@ -103,9 +102,6 @@ func initProviders(ko *koanf.Koanf, lo *logrus.Logger) []prvs.Provider {
 			if err != nil {
 				lo.WithError(err).Fatal("error initialising google chat provider")
 			}
-
-			// Start a background worker to cleanup alerts based on TTL mechanism.
-			go gchat.InitPruner(1 * time.Hour)
 
 			lo.WithField("room", gchat.GetRoom()).Info("initialised provider")
 			provs = append(provs, gchat)

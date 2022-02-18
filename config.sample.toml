@@ -13,7 +13,7 @@ max_idle_conns =  50
 timeout = "7s"
 # proxy_url = "http://internal-squid-proxy.com:3128"
 template = "static/message.tmpl"
-active_alerts_ttl = "5s"
+active_alerts_ttl = "12h"
 
 [providers.dev_alerts]
 endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=key&token=token%3D"

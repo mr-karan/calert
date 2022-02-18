@@ -19,7 +19,6 @@ type GoogleChatManager struct {
 	room         string
 	client       *http.Client
 	msgTmpl      *template.Template
-	ttl          time.Duration
 }
 
 type GoogleChatOpts struct {
@@ -70,7 +69,7 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 		return nil, err
 	}
 
-	return &GoogleChatManager{
+	mgr := &GoogleChatManager{
 		lo:       opts.Log,
 		client:   client,
 		endpoint: opts.Endpoint,
@@ -79,8 +78,11 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 			alerts: alerts,
 		},
 		msgTmpl: tmpl,
-		ttl:     opts.ActiveAlertsTTL,
-	}, nil
+	}
+	// Start a background worker to cleanup alerts based on TTL mechanism.
+	go mgr.activeAlerts.startPruneWorker(1*time.Hour, opts.ActiveAlertsTTL)
+
+	return mgr, nil
 }
 
 // Push accepts the list of alerts and dispatches them to Webhook API endpoint.

@@ -6,11 +6,13 @@ import (
 
 	"github.com/gofrs/uuid"
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
+	"github.com/sirupsen/logrus"
 )
 
 // ActiveAlerts represents a map of alerts unique fingerprint hash
 // with their details.
 type ActiveAlerts struct {
+	lo *logrus.Logger
 	sync.RWMutex
 	alerts map[string]AlertDetails
 }
@@ -51,14 +53,6 @@ func (d *ActiveAlerts) add(a alertmgrtmpl.Alert) error {
 	return nil
 }
 
-// remove removes the alert from the active alerts map.
-func (d *ActiveAlerts) remove(fingerprint string) {
-	d.Lock()
-	defer d.Unlock()
-
-	delete(d.alerts, fingerprint)
-}
-
 // loookup retrievs the UUID for the alert based on the fingerprint.
 func (d *ActiveAlerts) loookup(fingerprint string) string {
 	d.RLock()
@@ -69,6 +63,28 @@ func (d *ActiveAlerts) loookup(fingerprint string) string {
 		return ""
 	}
 	return d.alerts[fingerprint].UUID.String()
+}
+
+// Prune iterates on a list of active alerts inside the map
+// and deletes them if they exceed the specified TTL.
+func (d *ActiveAlerts) Prune(ttl time.Duration) {
+	d.Lock()
+	defer d.Unlock()
+
+	var (
+		now     = time.Now()
+		expired = now.Add(-ttl)
+	)
+
+	// Iterate on map of active alerts.
+	for k, a := range d.alerts {
+		// If the alert creation field is past our specified TTL, remove it from the map.
+		if a.StartsAt.Before(expired) {
+			d.lo.WithField("fingerprint", k).WithField("created", a.StartsAt).WithField("expired", expired).Debug("removing alert from active alerts")
+			delete(d.alerts, k)
+		}
+	}
+
 }
 
 // InitPruner is used to remove active alerts in the
@@ -87,26 +103,13 @@ func (d *ActiveAlerts) loookup(fingerprint string) string {
 // function as a GoRoutine and check if the alert creation timestamp has crossed our specified TTL. If it has, it'll delete the alert
 // entry from the map.
 // This check happens at a periodic interval specified by `pruneInterval` by the caller.
-func (m *GoogleChatManager) InitPruner(pruneInterval time.Duration) {
+func (d *ActiveAlerts) startPruneWorker(pruneInterval time.Duration, ttl time.Duration) {
 	var (
 		evalTicker = time.NewTicker(pruneInterval).C
 	)
 
 	for range evalTicker {
-		m.lo.Debug("pruning active alerts based on ttl")
-
-		var (
-			now     = time.Now()
-			expired = now.Add(-m.ttl)
-		)
-
-		// Iterate on map of active alerts.
-		for k, a := range m.activeAlerts.alerts {
-			// If the alert creation field is past our specified TTL, remove it from the map.
-			if a.StartsAt.Before(expired) {
-				m.lo.WithField("fingerprint", k).WithField("created", a.StartsAt).WithField("expired", expired).Debug("removing alert from active alerts")
-				m.activeAlerts.remove(k)
-			}
-		}
+		d.lo.Debug("pruning active alerts based on ttl")
+		d.Prune(ttl)
 	}
 }
