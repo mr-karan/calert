@@ -24,15 +24,15 @@ type GoogleChatManager struct {
 }
 
 type GoogleChatOpts struct {
-	Log             *logrus.Logger
-	Metrics         *metrics.Manager
-	MaxIdleConn     int
-	Timeout         time.Duration
-	ProxyURL        string
-	Endpoint        string
-	Room            string
-	Template        string
-	ActiveAlertsTTL time.Duration
+	Log         *logrus.Logger
+	Metrics     *metrics.Manager
+	MaxIdleConn int
+	Timeout     time.Duration
+	ProxyURL    string
+	Endpoint    string
+	Room        string
+	Template    string
+	ThreadTTL   time.Duration
 }
 
 // NewGoogleChat initializes a Google Chat provider object.
@@ -86,7 +86,7 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 		msgTmpl: tmpl,
 	}
 	// Start a background worker to cleanup alerts based on TTL mechanism.
-	go mgr.activeAlerts.startPruneWorker(1*time.Hour, opts.ActiveAlertsTTL)
+	go mgr.activeAlerts.startPruneWorker(1*time.Hour, opts.ThreadTTL)
 
 	return mgr, nil
 }

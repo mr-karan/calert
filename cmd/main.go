@@ -45,7 +45,7 @@ func main() {
 		metrics:  metrics,
 	}
 
-	app.lo.WithField("version", buildString).Info("booting calerts")
+	app.lo.WithField("version", buildString).Info("booting calert")
 
 	// Initialise HTTP Router.
 	r := chi.NewRouter()

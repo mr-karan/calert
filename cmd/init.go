@@ -90,15 +90,15 @@ func initProviders(ko *koanf.Koanf, lo *logrus.Logger, metrics *metrics.Manager)
 		case "google_chat":
 			gchat, err := google_chat.NewGoogleChat(
 				google_chat.GoogleChatOpts{
-					Log:             lo,
-					Timeout:         ko.MustDuration(fmt.Sprintf("%s.timeout", cfgKey)),
-					MaxIdleConn:     ko.MustInt(fmt.Sprintf("%s.max_idle_conns", cfgKey)),
-					ProxyURL:        ko.String(fmt.Sprintf("%s.proxy_url", cfgKey)),
-					Endpoint:        ko.MustString(fmt.Sprintf("%s.endpoint", cfgKey)),
-					Room:            name,
-					Template:        ko.MustString(fmt.Sprintf("%s.template", cfgKey)),
-					ActiveAlertsTTL: ko.MustDuration(fmt.Sprintf("%s.active_alerts_ttl", cfgKey)),
-					Metrics:         metrics,
+					Log:         lo,
+					Timeout:     ko.MustDuration(fmt.Sprintf("%s.timeout", cfgKey)),
+					MaxIdleConn: ko.MustInt(fmt.Sprintf("%s.max_idle_conns", cfgKey)),
+					ProxyURL:    ko.String(fmt.Sprintf("%s.proxy_url", cfgKey)),
+					Endpoint:    ko.MustString(fmt.Sprintf("%s.endpoint", cfgKey)),
+					Room:        name,
+					Template:    ko.MustString(fmt.Sprintf("%s.template", cfgKey)),
+					ThreadTTL:   ko.MustDuration(fmt.Sprintf("%s.thread_ttl", cfgKey)),
+					Metrics:     metrics,
 				},
 			)
 			if err != nil {

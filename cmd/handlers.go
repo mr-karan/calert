@@ -56,7 +56,7 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		app = r.Context().Value("app").(*App)
 	)
 	app.metrics.Increment(`http_requests_total{handler="index"}`)
-	sendResponse(w, "welcome to cAlerts!")
+	sendResponse(w, "welcome to calert!")
 }
 
 // Health check.

@@ -22,7 +22,7 @@ groups:
       room: prod_alerts
     annotations:
       title: "This is a dummy alert"
-      description: This is a DeadMansSwitch meant to ensure that the entire Alerting
+      description: This is a DeadMansSwitch meant to ensure that the entire Alerting pipeline is functional.
       summary: Consider running `htop` and check the processes consuming max RAM.
       severity: "{{ $labels.severity }}"
       instance: "{{ $labels.instance }}"
