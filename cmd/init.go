@@ -99,6 +99,7 @@ func initProviders(ko *koanf.Koanf, lo *logrus.Logger, metrics *metrics.Manager)
 					Template:    ko.MustString(fmt.Sprintf("%s.template", cfgKey)),
 					ThreadTTL:   ko.MustDuration(fmt.Sprintf("%s.thread_ttl", cfgKey)),
 					Metrics:     metrics,
+					DryRun:      ko.Bool(fmt.Sprintf("%s.dry_run", cfgKey)),
 				},
 			)
 			if err != nil {

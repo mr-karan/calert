@@ -1,6 +1,8 @@
 package notifier
 
 import (
+	"fmt"
+
 	"github.com/mr-karan/calert/internal/providers"
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
 	"github.com/sirupsen/logrus"
@@ -35,26 +37,16 @@ func Init(opts Opts) (Notifier, error) {
 }
 
 // Dispatch pushes out a notification to an upstream provider.
-func (n *Notifier) Dispatch(alerts []alertmgrtmpl.Alert) error {
+func (n *Notifier) Dispatch(alerts []alertmgrtmpl.Alert, room string) error {
 	n.lo.WithField("count", len(alerts)).Info("dispatching alerts")
 
-	// Group alerts based on their room names.
-	alertsByRoom := make(map[string][]alertmgrtmpl.Alert, 0)
-	for _, a := range alerts {
-		room := a.Labels["room"]
-		alertsByRoom[room] = append(alertsByRoom[room], a)
+	// Lookup for the provider by the room name.
+	if _, ok := n.providers[room]; !ok {
+		n.lo.WithField("room", room).Warn("no provider available for room")
+		return fmt.Errorf("no provider configured for room: %s", room)
 	}
-
-	// For each room, dispatch the alert based on their provider.
-	for k, v := range alertsByRoom {
-		// Lookup for the provider by the room name.
-		if _, ok := n.providers[k]; !ok {
-			n.lo.WithField("room", k).Warn("no provider available for room")
-			continue
-		}
-		// Push the batch of alerts.
-		n.providers[k].Push(v)
-	}
+	// Push the batch of alerts.
+	n.providers[room].Push(alerts)
 
 	return nil
 }

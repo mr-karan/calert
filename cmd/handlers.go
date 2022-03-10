@@ -94,8 +94,10 @@ func handleDispatchNotif(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	app.lo.WithField("receiver", payload.Receiver).Info("dispatching new alert")
+
 	// Dispatch a list of alerts via Notifier.
-	if err := app.notifier.Dispatch(payload.Alerts); err != nil {
+	if err := app.notifier.Dispatch(payload.Alerts, payload.Receiver); err != nil {
 		app.lo.WithError(err).Error("error dispatching alerts")
 		app.metrics.Increment(`http_request_errors_total{handler="dispatch"}`)
 		sendErrorResponse(w, "Error dispatching alerts.", http.StatusInternalServerError, nil)

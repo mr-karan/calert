@@ -1,11 +1,22 @@
 route:
-    receiver: 'calert'
     group_wait: 15s
     group_interval: 30s
     repeat_interval: 1m
-    group_by: ['room', 'alertName']
+    group_by: ["alertname", "severity"]
+    # A default receiver
+    receiver: dev_alerts
+
+    # Specific condition to route critical alerts on prod channel.
+    routes:
+    - matchers:
+        - severity=~"critical"
+      receiver: prod_alerts
 
 receivers:
-    - name: 'calert'
+    - name: 'prod_alerts'
+      webhook_configs:
+      - url: 'http://calert:6000/dispatch'
+
+    - name: 'dev_alerts'
       webhook_configs:
       - url: 'http://calert:6000/dispatch'

@@ -21,11 +21,13 @@ type GoogleChatManager struct {
 	room         string
 	client       *http.Client
 	msgTmpl      *template.Template
+	dryRun       bool
 }
 
 type GoogleChatOpts struct {
 	Log         *logrus.Logger
 	Metrics     *metrics.Manager
+	DryRun      bool
 	MaxIdleConn int
 	Timeout     time.Duration
 	ProxyURL    string
@@ -84,6 +86,7 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 			metrics: opts.Metrics,
 		},
 		msgTmpl: tmpl,
+		dryRun:  opts.DryRun,
 	}
 	// Start a background worker to cleanup alerts based on TTL mechanism.
 	go mgr.activeAlerts.startPruneWorker(1*time.Hour, opts.ThreadTTL)
@@ -119,10 +122,14 @@ func (m *GoogleChatManager) Push(alerts []alertmgrtmpl.Alert) error {
 			m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
 
 			// Send message to API.
-			if err := m.sendMessage(msg, threadKey); err != nil {
-				m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_errors_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
-				m.lo.WithError(err).Error("error sending message")
-				continue
+			if m.dryRun {
+				m.lo.WithField("room", m.Room()).Info("dry_run is enabled for this room. skipping pushing notification")
+			} else {
+				if err := m.sendMessage(msg, threadKey); err != nil {
+					m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_errors_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
+					m.lo.WithError(err).Error("error sending message")
+					continue
+				}
 			}
 
 			m.metrics.Duration(fmt.Sprintf(`alerts_dispatched_duration_seconds{provider="%s", room="%s"}`, m.ID(), m.Room()), now)

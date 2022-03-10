@@ -1,7 +1,7 @@
 [app]
 address = "0.0.0.0:6000" # Address of the HTTP Server.
 server_timeout = "5s" # Server timeout for HTTP requests.
-enable_request_logs = true # Whether to log incoming requests or not.
+enable_request_logs = true # Whether to log incoming HTTP requests or not.
 log = "info" # Use `debug` to enable verbose logging. Can be set to `info` otherwise.
 
 [providers.prod_alerts]
@@ -12,6 +12,7 @@ timeout = "7s" # Timeout for making requests to Provider.
 # proxy_url = "http://internal-squid-proxy.com:3128" # Specify `proxy_url` as your proxy endpoint to route all HTTP requests to the provider via a proxy.
 template = "static/message.tmpl" # Path to specify the message template path.
 thread_ttl = "12h" # Timeout to keep active alerts in memory. Once this TTL expires, a new thread will be created.
+dry_run = false
 
 [providers.dev_alerts]
 type = "google_chat"
@@ -21,3 +22,4 @@ timeout = "7s"
 # proxy_url = "http://internal-squid-proxy.com:3128"
 template = "static/message.tmpl"
 thread_ttl = "12h"
+dry_run = false

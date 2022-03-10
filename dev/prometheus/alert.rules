@@ -6,23 +6,21 @@ groups:
     for: 10s
     labels:
       severity: warning
-      room: dev_alerts
     annotations:
       title: "This is a dummy alert"
       description: This is a DeadMansSwitch meant to ensure that the entire Alerting
       summary: Consider running `htop` and check the processes consuming max RAM.
-      severity: "{{ $labels.severity }}"
-      instance: "{{ $labels.instance }}"
+      zone: "ap-south-1a"
+      service: "hello-world"
 
   - alert: DeadManAnotherSwitch
     expr: vector(2)==2
     for: 10s
     labels:
       severity: warning
-      room: prod_alerts
     annotations:
       title: "This is a dummy alert"
       description: This is a DeadMansSwitch meant to ensure that the entire Alerting pipeline is functional.
       summary: Consider running `htop` and check the processes consuming max RAM.
-      severity: "{{ $labels.severity }}"
-      instance: "{{ $labels.instance }}"
+      zone: "ap-south-1b"
+      service: "hello-world"

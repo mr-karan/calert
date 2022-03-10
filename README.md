@@ -130,24 +130,21 @@ A few notes on `v2` migration:
 
 `v2` is a complete rewrite from scratch and **is a breaking release**. The configuration has changed extensively. Please refer to latest [`config.sample.toml`](config.sample.toml) for a complete working example of the config.
 
-### Mandatory label required in rules
+### Dry Run Mode
 
-Apart from the config, `calert` now expects a mandatory label (`room`) to be present in your Prometheus Alert rules. Previously, the room was identified with `?room` query parameter. However, since the Alert payload contains the labels, it's better to extract this information from the labels instead of a query param.
+In case you're simply experimenting with `calert` config changes and you don't wish to send _actual_ notifications, you can set `dry_run=true` in each provider.
 
-Here's an example of how the Prometheus Alert should look like (Notice the `labels` section has `room` (with value of `prod_alerts`) which should match one of `provider.<room_name>` (eg `provider.prod_alerts`) in your `config.toml`):
+### Room Name for Google Chat
+
+Apart from the config, `calert` now determines the `room` based on the `receiver` specified in Alertmanager config. Previously, the room was identified with `?room` query parameter in each HTTP request. However, since the Alert payload contains the `receiver` name, it's better to extract this information from the labels instead.
+
+Here's an example of how Alertmanager config looks like. Notice the value of `receiver` (`prod_alerts`) should match one of `provider.<room_name>` (eg `provider.prod_alerts`) in your `config.toml`):
 
 ```yml
-- alert: DeadMansSwitch
-  expr: vector(1)==1
-  for: 10s
-  labels:
-    severity: warning
-    room: prod_alerts
-  annotations:
-    title: "This is a dummy alert"
-    description: This is a DeadMansSwitch meant to ensure that the entire alerting pipeline is functional.
-    summary: Consider running `htop` and check the processes consuming max RAM.
-    severity: "{{ $labels.severity }}"
+receivers:
+    - name: 'prod_alerts'
+      webhook_configs:
+      - url: 'http://calert:6000/dispatch'
 ```
 
 ## Contribution
