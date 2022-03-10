@@ -1,4 +1,0 @@
-resources:
-- deployments/calert.yaml
-- services/calert.yaml
-namePrefix: calert-

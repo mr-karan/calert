@@ -1,0 +1,11 @@
+services:
+  calert:
+    container_name: calert
+    image: ghcr.io/mr-karan/calert:latest
+    ports:
+      - 6000:6000
+    command:
+      - "--config=./config.toml"
+    volumes:
+      - ./config.toml:/app/config.toml
+    restart: unless-stopped

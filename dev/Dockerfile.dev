@@ -1,0 +1,4 @@
+FROM golang:1.17 as builder
+# Disable CGO
+ENV CGO_ENABLED=0
+WORKDIR /app

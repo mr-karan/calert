@@ -1,4 +1,0 @@
-*{{ .Labels.alertname | Title }} - {{.Status | Title }} ({{.Labels.severity | toUpper }})*
-{{ range .Annotations.SortedPairs -}}
-{{ .Name }}: {{ .Value}}
-{{ end -}}

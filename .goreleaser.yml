@@ -1,10 +1,10 @@
 env:
   - GO111MODULE=on
   - CGO_ENABLED=0
-  - RELEASE_BUILDS=dist/calert_darwin_amd64/calert dist/calert_linux_amd64/calert dist/calert_windows_amd64//calert.exe
 
 builds:
-  - binary: calert
+  - binary: calert.bin
+    id: calert
     goos:
       - windows
       - darwin
@@ -12,48 +12,72 @@ builds:
     goarch:
       - amd64
     ldflags:
-      - -s -w -X "main.buildVersion={{ .Tag }} ({{ .ShortCommit }} {{ .Date }})"
+      - -s -w -X "main.buildString={{ .Tag }} ({{ .ShortCommit }} {{ .Date }})"
+    dir: ./cmd/
 
 archives:
   - format: tar.gz
     files:
-      - config.sample.toml
       - README.md
       - LICENSE
-      - message.tmpl
+      - config.sample.toml
+      - static/
 
 dockers:
-  # You can have multiple Docker images.
-  -
-    # GOOS of the built binary that should be used.
+  - # ID of the image, needed if you want to filter by it later on (e.g. on custom publishers).
+    id: calert
+
+    # GOOS of the built binaries/packages that should be used.
     goos: linux
-    # GOARCH of the built binary that should be used.
+
+    # GOARCH of the built binaries/packages that should be used.
     goarch: amd64
-    # GOARM of the built binary that should be used.
-    goarm: ''
-    # Name templates of the built binaries that should be used.
-    binaries:
-    - calert
+
+    # IDs to filter the binaries/packages.
+    ids:
+      - calert
+
     # Templates of the Docker image names.
     image_templates:
-    - "mrkaran/calert:latest"
-    - "mrkaran/calert:{{ .Tag }}"
-    # Skips the docker push. Could be useful if you also do draft releases.
-    # If set to auto, the release will not be pushed to the docker repository
-    # in case there is an indicator for prerelease in the tag e.g. v1.0.0-rc1
+      - "ghcr.io/mr-karan/calert:{{ .Tag }}"
+      - "ghcr.io/mr-karan/calert:latest"
+
+    # Skips the docker push.
+    # Could be useful if you also do draft releases.
+    #
+    # If set to auto, the release will not be pushed to the Docker repository
+    #  in case there is an indicator of a prerelease in the tag, e.g. v1.0.0-rc1.
+    #
     # Defaults to false.
     skip_push: false
+
     # Path to the Dockerfile (from the project root).
     dockerfile: Dockerfile
-    # If your Dockerfile copies files other than the binary itself,
+
+    # Set the "backend" for the Docker pipe.
+    # Valid options are: docker, buildx, podman, buildpacks
+    # podman is a GoReleaser Pro feature and is only available on Linux.
+    # Defaults to docker.
+    use: docker
+
+    # Template of the docker build flags.
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--platform=linux/amd64"
+
+    # If your Dockerfile copies files other than binaries and packages,
     # you should list them here as well.
-    # Note that goreleaser will create the same structure inside the temporary
+    # Note that GoReleaser will create the same structure inside a temporary
     # folder, so if you add `foo/bar.json` here, on your Dockerfile you can
     # `COPY foo/bar.json /whatever.json`.
     # Also note that the paths here are relative to the folder in which
-    # goreleaser is being run.
+    # GoReleaser is being run (usually the repository root folder).
     # This field does not support wildcards, you can add an entire folder here
     # and use wildcards when you `COPY`/`ADD` in your Dockerfile.
     extra_files:
-    - config.sample.toml
-    - message.tmpl
+      - config.sample.toml
+      - static/

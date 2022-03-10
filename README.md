@@ -2,150 +2,155 @@
 
 # calert
 
-<img src="images/logo.png" width="400">
+_Send Alertmanager notifications to Google Chat (and more!)_
 
-## Overview [![GoDoc](https://godoc.org/github.com/mr-karan/calert?status.svg)](https://godoc.org/github.com/mr-karan/calert) [![Go Report Card](https://goreportcard.com/badge/github.com/mr-karan/calert)](https://goreportcard.com/report/github.com/mr-karan/calert)
-
-[![GitHub tag](https://img.shields.io/github/tag/mr-karan/calert.svg)](https://github.com/mr-karan/calert/releases/)
-
-`calert` is a lightweight binary to push [Alertmanager](https://github.com/prometheus/alertmanager) notifications to [Google Chat](http://chat.google.com) via webhook integration.
-
-## Table of Contents
-
--   [Getting Started](#getting-started-quickstart)
-
-    -   [How it Works](#how-it-works)
-    -   [Installation](#installation)
-    -   [Quickstart](#quickstart)
-    -   [Testing a sample alert](#testing-a-sample-alert)
-
--   [Advanced Section](#advanced-section)
-
-    -   [Configuration options](#configuation-options)
-    -   [API Usage](#api-usage)
-    -   [Setting up Prometheus](#setting-up-prometheus)
-
--   [Ansible Playbook](#ansible-playbook)
-
-## Getting Started (Quickstart)
-
-### How it Works
-
-![](images/calert.svg)
+![](docs/images/calert.png)
 
 `calert` uses Alertmanager [webhook receiver](https://prometheus.io/docs/alerting/configuration/#webhook_config) to receive alerts payload, and pushes this data to Google Chat [webhook](https://developers.google.com/hangouts/chat/how-tos/webhooks) endpoint.
 
-### Installation
+## Quickstart
 
-There are multiple ways of installing/running calert.
+### Binary
 
--   ### Precompiled binaries
+Grab the latest release from [Releases](https://github.com/mr-karan/calert/releases).
 
-    Precompiled binaries for released versions are available in the [_Releases_ section](https://github.com/mr-karan/calert/releases/).
-
--   ### Compiling the binary
-
-    You can checkout the source code and build manually:
-
-    ```
-    $ mkdir -p $GOPATH/src/github.com/mr-karan/
-    $ cd $GOPATH/src/github.com/mr-karan
-    $ git clone https://github.com/mr-karan/calert.git
-    $ cd calert
-    $ make build
-    $ cp config.toml.sample config.toml
-    $ ./calert
-    ```
- 
--   ### Running as docker container
-    `docker pull mrkaran/calert:latest`
-
-You can find all the tags [here](https://hub.docker.com/r/mrkaran/calert/tags?page=1&ordering=last_updated).
-
--   ### Deploying on Kubernetes cluster
-    `kustomize build ./kustomize/overlays/prod | kubectl apply -f -`
-
-### Quickstart
+To run:
 
 ```sh
-mkdir calert-example && cd calert-example/ # copy the binary and config.toml.sample in this folder
-cp config.toml.sample config.toml # change the settings like hostname, address, google chat webhook url, timeouts etc in this file.
-./calert.bin # this command starts a web server (calert API) and is ready to receive events from alertmanager
+./calert.bin --config config.toml
 ```
 
--   Set the webhook URL from Google Chat in `[app.chat.<yourRoomName>.notification_url]` section of `config.toml`. You can refer to the [official documentation](https://developers.google.com/hangouts/chat/quickstart/incoming-bot-python#step_1_register_the_incoming_webhook) for more details.
+### Docker
 
-You are now ready to send alerts to Google Chat!
+You can find the list of docker images [here](https://github.com/mr-karan/calert/pkgs/container/calert)
 
-### Testing a sample alert
-
-To help you quickly get started, you can `POST` a dummy payload which is similar to `Alertmanager` payload, present in [examples/send_alert.sh](examples/send_alert.sh).
-
-![](images/gchat.png)
-
-## Advanced Section
-
-### Configuration Options
-
--   **[server]**
-
-    -   **address**: Port which the server listens to.
-    -   **socket**: _Optional_, if you want to connect to the server using unix socket.
-    -   **name**: _Optional_, human identifier for the server.
-    -   **read_timeout**: Duration (in milliseconds) for the request body to be fully read) Read this [blog](https://blog.cloudflare.com/the-complete-guide-to-golang-net-http-timeouts/) for more info.
-    -   **write_timeout**: Duration (in milliseconds) for the response body to be written.
-    -   **keepalive_timeout**: Duration (in milliseconds) the server waits for the connection to be re-used in case the request is sent with Keep-Alive header.
-
--   **[app]**
-
-    -   **template_file**: Path to template file used for parsing Alertmanager payload to Google Chat message. You can configure the default template for notification and create your own. Create a [template](https://golang.org/pkg/text/template/) file, similar to [message.tmpl](message.tmpl) and set the path of this file in this setting.
-    -   **max_size**: The maximum size of a single push to the webhook URL.
-    -   **http_client**
-        -   **max_idle_conns**: _Optional_, Maximum count of keep-alive collections per host.
-        -   **request_timeout**: Duration (in milliseconds) to wait for the response.
-    -   **chat.your_room_name**
-        -   **notification_url**: Webhook URL of Google Chat Room where Incoming Webhooks are configured.
-    -   **http_client**
-        -   **max_idle_conns**: _Optional_, Maximum count of keep-alive collections per host.
-        -   **request_timeout**: Duration (in milliseconds) to wait for the response.
-    -   **chat.your_room_name**
-        -   **notification_url**: Webhook URL of Google Chat Room where Incoming Webhooks are configured.
-
-**NOTE**: You can use `--config.file` parameter to supply a custom config file path while running `calert`.
-
-### API Usage
-
--   POST `/create?room_name=<>` (Used to receive new alerts and push to Google Chat.)
-
-```sh
-# example request. (See examples/send_alert.sh)
-➜ curl -XPOST -d"$alerts1" http://localhost:6000/create?room_name=<room> -i
-{"status":"success","message":"Alert sent","data":null}
+```
+docker pull ghcr.io/mr-karan/calert:latest
 ```
 
-_`room_name`_ param is required. The same `room_name` should be present in `app.chat` section. You can refer to the `config.sample` for examples.
+Here's an example `docker-compose` config with a custom `message.tmpl` mounted inside the container:
 
--   GET `/ping` (Health check endpoint)
-
-```sh
-➜ curl http://localhost:6000/ping
-{"status":"success","data":{"buildVersion":"025a3a3 (2018-12-26 22:04:46 +0530)","buildDate":"2018-12-27 10:41:52","ping":"pong"}}
+```yml
+  calert:
+    image: ghcr.io/mr-karan/calert:latest
+    ports:
+      - "6000:6000"
+    volumes:
+      - ./message.tmpl:/etc/calert/message.tmpl
 ```
 
-### Setting Up Prometheus
+### Configuration
+
+Refer to [config.sample.toml](./config.sample.toml) for instructions on how to configure `calert`.
+
+All the config variables can also be supplied as Environment Variables by prefixing `CALERT_` and replacing `.` (_period_) with `__` (_double underscores_).
+
+Example:
+
+- `app.address` would become `CALERT_APP__ADDRESS`
+
+#### App
+
+|  Key  	|  Explanation 	| Default 	|
+|---	| ---	| --- |
+|  `app.address` 	| Address of the HTTP Server. 	| `0.0.0.0:6000`	|
+|  `app.server_timeout` 	| Server timeout for HTTP requests.  	| `5s` |
+|  `app.enable_request_logs` 	| Enable HTTP request logging.  	| `true` |
+|  `app.log` 	| Use `debug` to enable verbose logging. Can be set to `info` otherwise.  	| `info` |
+
+
+#### Providers
+
+`calert` can load a map of different _providers_. The unique identifier for the `provider` is the room name. Each provider has it's own configuration, based on it's `provider_type. Currently `calert` supports Google Chat but can support arbitary providers as well.
+
+|  Key  	|  Explanation 	| Default 	|
+|---	| ---	| --- |
+|  `providers.<room_name>.type` 	| Provider type. Currently only `google_chat` is supported. 	| `google_chat`	|
+|  `providers.<room_name>.endpoint` 	| Webhook URL to send alerts to.  	| - |
+|  `providers.<room_name>.max_idle_conns` 	| Maximum Keep Alive connections to keep in the pool.  	| `50` |
+|  `providers.<room_name>.timeout` 	| Timeout for making HTTP requests to the webhook URL.  	| `7s` |
+|  `providers.<room_name>.template` 	| Template for rendering a formatted Alert notification.  	| `static/message.tmpl` |
+|  `providers.<room_name>.thread_ttl` 	| Timeout to keep active alerts in memory. Once this TTL expires, a new thread will be created.	| `12h` |
+
+## Alertmanager Integration
 
 -   Alertmanager has the ability of group similar alerts together and fire only one event, clubbing all the alerts data into one event. `calert` leverages this and sends all alerts in one message by looping over the alerts and passing data in the template. You can configure the rules for grouping the alerts in `alertmanager.yml` config. You can read more about it [here](https://github.com/prometheus/docs/blob/master/content/docs/alerting/alertmanager.md#grouping).
 
-*   Configure Alertmanager config file (`alertmanager.yml`) and give the address of calert web-server. You can refer to the [official documentation](https://prometheus.io/docs/alerting/configuration/#webhook_config) for more details.
+- Configure Alertmanager config file (`alertmanager.yml`) and give the address of calert web-server. You can refer to the [official documentation](https://prometheus.io/docs/alerting/configuration/#webhook_config) for more details.
 
-## Ansible Playbook
+You can refer to the following config block to route webhook alerts to `calert`:
 
--   You can refer to the `calert` [role](https://github.com/mr-karan/ansible-server-logs-monitoring/tree/master/roles/calert) in my [Ansible Server Logs-Monitoring](https://github.com/mr-karan/ansible-server-logs-monitoring/) playbook.
+```yml
+route:
+    receiver: 'calert'
+    group_wait: 30s
+    group_interval: 60s
+    repeat_interval: 15m
+    group_by: ['room', 'alertName']
+
+receivers:
+    - name: 'calert'
+      webhook_configs:
+      - url: 'http://calert:6000/dispatch'
+```
+
+## Threading Support in Google Chat
+
+`calert` ships with a basic support for sending multiple related alerts under a same thread, working around the limitations by Alertmanager.
+
+Alertmanager currently doesn't send any _Unique Identifier_ for each Alert. The use-case of sending related alerts under the same thread is helpful to triage similar alerts and see all their different states (_Firing_, _Resolved_) for people consuming these alerts. `calert` tries to solve this by:
+
+- Use the `fingerprint` field present in the Alert. This field is computed by hashing the labels for an alert.
+- Create a map of `active_alerts` in memory. Add an alert by it's fingerprint and generate a random `UUID.v4` and store that in the map (along with some more meta-data like `startAt` field).
+- Use `?threadKey=uuid` query param while making a request to Google Chat. This ensures that all alerts with same fingerprint (=_same labels_) go under the same thread.
+- A background worker runs _every hour_ which scans the map of `active_alerts`. It checks whether the alert's `startAt` field has crossed the TTL (as specified by `thread_ttl`). If the TTL is expired then the `alert` is removed from the map. This ensures that the map of `active_alerts` doesn't grow unbounded and after a certain TTL all alerts are sent to a new thread.
+
+## Prometheus Metrics
+
+`calert` exposes various metrics in the Prometheus exposition format.
+
+Here's a list of internal app metrics available at `/metrics`:
+
+|  Name  	|  Description 	| Data type 	|
+|---	| ---	| --- |
+|  `calert_uptime_seconds` 	| Uptime of app (_in seconds_). 	| `counter`	|
+|  `calert_start_timestamp` 	| UNIX timestamp since the app was booted.  	| `gauge` |
+|  `calert_http_requests_total` 	| Number of HTTP requests, grouped with labels like `handler`.  	| `counter` |
+|  `calert_http_request_duration_seconds_{sum,count,bucket}` 	| Duration of HTTP request (_in seconds_).  	| `histogram` |
+|  `calert_alerts_dispatched_total` 	| Number of alerts dispatched to upstream providers, grouped with labels like `provider` and `room`.  	| `counter` |
+|  `calert_alerts_dispatched_duration_seconds_{sum,count,bucket}` 	| Duration to send an alert to upstream provider.	| `histogram` |
+
+It also exposes Go process metrics in addition to app metrics, which you can use to monitor the performance of `calert`.
+
+## v2 Migration
+
+A few notes on `v2` migration:
+
+### Config schema changes
+
+`v2` is a complete rewrite from scratch and **is a breaking release**. The configuration has changed extensively. Please refer to latest [`config.sample.toml`](config.sample.toml) for a complete working example of the config.
+
+### Dry Run Mode
+
+In case you're simply experimenting with `calert` config changes and you don't wish to send _actual_ notifications, you can set `dry_run=true` in each provider.
+
+### Room Name for Google Chat
+
+Apart from the config, `calert` now determines the `room` based on the `receiver` specified in Alertmanager config. Previously, the room was identified with `?room` query parameter in each HTTP request. However, since the Alert payload contains the `receiver` name, it's better to extract this information from the labels instead.
+
+Here's an example of how Alertmanager config looks like. Notice the value of `receiver` (`prod_alerts`) should match one of `provider.<room_name>` (eg `provider.prod_alerts`) in your `config.toml`):
+
+```yml
+receivers:
+    - name: 'prod_alerts'
+      webhook_configs:
+      - url: 'http://calert:6000/dispatch'
+```
 
 ## Contribution
 
-PRs on Feature Requests, Bug fixes are welcome. Feel free to open an issue and have a discussion first. Read [CONTRIBUTING.md](CONTRIBUTING.md) for more details.
+PRs on Feature Requests, Bug fixes are welcome. Feel free to open an issue and have a discussion first.
 
 ## License
 
-[MIT](license)
+[LICENSE](LICENSE)

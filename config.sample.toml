@@ -1,27 +1,25 @@
-# All timeouts and durations are in milliseconds.
-
-[server]
-address = ":6000"
-socket = "/tmp/calert.sock"
-name = "calert"
-
-# WARNING If these timeouts are less than 1s,
-# the server connection breaks.
-read_timeout=5000
-write_timeout=5000
-keepalive_timeout=300000
-
 [app]
-template_file = "/etc/calert/message.tmpl"
-max_size = 4000
+address = "0.0.0.0:6000" # Address of the HTTP Server.
+server_timeout = "5s" # Server timeout for HTTP requests.
+enable_request_logs = true # Whether to log incoming HTTP requests or not.
+log = "info" # Use `debug` to enable verbose logging. Can be set to `info` otherwise.
 
-[app.http_client]
-max_idle_conns =  100
-request_timeout = 8000
-proxy_url = "http://internal-squid-proxy.com:3128"
+[providers.prod_alerts]
+type = "google_chat" # Type of provider. Currently supported value is `google_chat`.
+endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=key&token=token%3D" # Google Chat Webhook URL
+max_idle_conns =  50 # Max idle connections in the HTTP Client.
+timeout = "7s" # Timeout for making requests to Provider.
+# proxy_url = "http://internal-squid-proxy.com:3128" # Specify `proxy_url` as your proxy endpoint to route all HTTP requests to the provider via a proxy.
+template = "static/message.tmpl" # Path to specify the message template path.
+thread_ttl = "12h" # Timeout to keep active alerts in memory. Once this TTL expires, a new thread will be created.
+dry_run = false
 
-[app.chat.alertManagerTestRoom]
-notification_url = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=abc-xyz&token=token-unique-key%3D"
-
-[app.chat.awesomeRoomTwo]
-notification_url = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=abc-xyz&token=token-unique-key%3D"
+[providers.dev_alerts]
+type = "google_chat"
+endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=key&token=token%3D"
+max_idle_conns =  50
+timeout = "7s"
+# proxy_url = "http://internal-squid-proxy.com:3128"
+template = "static/message.tmpl"
+thread_ttl = "12h"
+dry_run = false
