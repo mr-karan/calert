@@ -25,19 +25,26 @@ type App struct {
 }
 
 func main() {
+	// Initialise logger.
+	lo := initLogger()
+
 	// Initialise and load the config.
-	ko, err := initConfig("config.sample.toml", "CALERT_")
+	ko, err := initConfig(lo, "config.sample.toml", "CALERT_")
 	if err != nil {
 		// Need to `panic` since logger can only be initialised once config is initialised.
 		panic(err.Error())
 	}
 
 	var (
-		lo       = initLogger(ko)
 		metrics  = initMetrics()
 		provs    = initProviders(ko, lo, metrics)
 		notifier = initNotifier(ko, lo, provs)
 	)
+
+	// Enable debug mode if specified.
+	if ko.String("app.log") == "debug" {
+		lo.SetLevel(logrus.DebugLevel)
+	}
 
 	app := &App{
 		lo:       lo,

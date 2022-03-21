@@ -18,7 +18,7 @@ import (
 )
 
 // initLogger initializes logger instance.
-func initLogger(ko *koanf.Koanf) *logrus.Logger {
+func initLogger() *logrus.Logger {
 	logger := logrus.New()
 
 	logger.SetFormatter(&logrus.TextFormatter{
@@ -26,16 +26,11 @@ func initLogger(ko *koanf.Koanf) *logrus.Logger {
 		DisableLevelTruncation: true,
 	})
 
-	// Enable debug mode if specified.
-	if ko.String("app.log") == "debug" {
-		logger.SetLevel(logrus.DebugLevel)
-	}
-
 	return logger
 }
 
 // initConfig loads config to `ko` object.
-func initConfig(cfgDefault string, envPrefix string) (*koanf.Koanf, error) {
+func initConfig(lo *logrus.Logger, cfgDefault string, envPrefix string) (*koanf.Koanf, error) {
 	var (
 		ko = koanf.New(".")
 		f  = flag.NewFlagSet("front", flag.ContinueOnError)
@@ -57,11 +52,19 @@ func initConfig(cfgDefault string, envPrefix string) (*koanf.Koanf, error) {
 	}
 
 	// Load the config files from the path provided.
+	lo.WithField("path", *cfgPath).Info("attempting to load config from file")
+
 	err = ko.Load(file.Provider(*cfgPath), toml.Parser())
 	if err != nil {
-		return nil, err
+		// If the default config is not present, print a warning and continue reading the values from env.
+		if *cfgPath == cfgDefault {
+			lo.WithError(err).Warn("unable to open sample config file")
+		} else {
+			return nil, err
+		}
 	}
 
+	lo.Info("attempting to read config from env vars")
 	// Load environment variables if the key is given
 	// and merge into the loaded config.
 	if envPrefix != "" {
