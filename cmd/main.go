@@ -26,7 +26,7 @@ type App struct {
 
 func main() {
 	// Initialise and load the config.
-	ko, err := initConfig("config.sample.toml", "CALERTS_")
+	ko, err := initConfig("config.sample.toml", "CALERT_")
 	if err != nil {
 		// Need to `panic` since logger can only be initialised once config is initialised.
 		panic(err.Error())
