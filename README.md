@@ -151,6 +151,8 @@ receivers:
 
 PRs on Feature Requests, Bug fixes are welcome. Feel free to open an issue and have a discussion first.
 
+For deployment manifests like Helm, Kustomize, Nomad etc - they're placed under `contrib` folder and generally manintained by the community.
+
 ## License
 
 [LICENSE](LICENSE)
