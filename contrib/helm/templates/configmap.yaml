@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "calert.fullname" . }}-config
+  labels:
+    app: {{ template "calert.name" . }}
+    chart: {{ template "calert.chart" . }}
+    heritage: {{ .Release.Service }}
+    release: {{ .Release.Name }}
+data:
+  message.tmpl: {{- toYaml .Values.template_file | indent 4 }}
+  config.toml: |
+    # All timeouts and durations are in milliseconds.
+    [app]
+    address = {{ .Values.configmap.app.address | quote }}
+    server_timeout = {{ .Values.configmap.app.server_timeout | quote }}
+    enable_request_logs = {{ .Values.configmap.app.enable_request_logs | quote }}
+    log = {{ .Values.configmap.app.enable_request_logs | quote }}
+
+    [providers.prod_alerts]
+    type = {{ .Values.configmap.providers.prod_alerts.type | quote }}
+    endpoint = {{ .Values.configmap.providers.prod_alerts.endpoint | quote }}
+    max_idle_conns = {{ .Values.configmap.providers.prod_alerts.max_idle_conns | quote }}
+    timeout = {{ .Values.configmap.providers.prod_alerts.timeout | quote }}
+    proxy_url = {{ .Values.configmap.providers.prod_alerts.proxy_url | quote }}
+    template = {{ .Values.configmap.providers.prod_alerts.template | quote }}
+    thread_ttl = {{ .Values.configmap.providers.prod_alerts.thread_ttl | quote }}
+    dry_run = {{ .Values.configmap.providers.prod_alerts.dry_run | quote }}
+
+    [providers.dev_alerts]
+    type = {{ .Values.configmap.providers.dev_alerts.type | quote }}
+    endpoint = {{ .Values.configmap.providers.dev_alerts.endpoint | quote }}
+    max_idle_conns = {{ .Values.configmap.providers.dev_alerts.max_idle_conns | quote }}
+    timeout = {{ .Values.configmap.providers.dev_alerts.timeout | quote }}
+    proxy_url = {{ .Values.configmap.providers.dev_alerts.proxy_url | quote }}
+    template = {{ .Values.configmap.providers.dev_alerts.template | quote }}
+    thread_ttl = {{ .Values.configmap.providers.dev_alerts.thread_ttl | quote }}
+    dry_run = {{ .Values.configmap.providers.dev_alerts.dry_run | quote }}
+
+    {{- with .Values.configmap.rooms }}
+    {{ tpl . $ | indent 4 }}
+    {{- end }}
