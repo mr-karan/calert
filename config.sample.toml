@@ -18,7 +18,7 @@ dry_run = false
 type = "google_chat"
 endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=key&token=token%3D"
 max_idle_conns =  50
-timeout = "7s"
+timeout = "30s"
 # proxy_url = "http://internal-squid-proxy.com:3128"
 template = "static/message.tmpl"
 thread_ttl = "12h"

@@ -8,7 +8,7 @@ configmap:
     # Address of the HTTP Server.
     address: "0.0.0.0:6000"
     # Server timeout for HTTP requests.
-    server_timeout: "5s"
+    server_timeout: "60s"
     # Whether to log incoming HTTP requests or not.
     enable_request_logs: true
     # Use `debug` to enable verbose logging. Can be set to `info` otherwise.
@@ -22,7 +22,7 @@ configmap:
       # Max idle connections in the HTTP Client.
       max_idle_conns: 50
       # Timeout for making requests to Provider.
-      timeout: "7s"
+      timeout: "30s"
       # Specify `proxy_url` as your proxy endpoint to route all HTTP requests to the provider via a proxy.
       proxy_url: "http://internal-squid-proxy.com:3128"
       # Path to specify the message template path.
@@ -40,7 +40,7 @@ configmap:
       # Max idle connections in the HTTP Client.
       max_idle_conns: 50
       # Timeout for making requests to Provider.
-      timeout: "7s"
+      timeout: "30s"
       # Specify `proxy_url` as your proxy endpoint to route all HTTP requests to the provider via a proxy.
       proxy_url: "http://internal-squid-proxy.com:3128"
       # Path to specify the message template path.
