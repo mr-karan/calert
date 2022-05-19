@@ -15,6 +15,9 @@ spec:
       annotations:
         # https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- range $key, $value := .Values.podAnnotations }}
+        {{ $key }}: {{ $value | quote }}
+        {{- end }}
       labels:
         app.kubernetes.io/name: {{ include "calert.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
@@ -66,8 +69,10 @@ spec:
             items:
             - key: config.toml
               path: config.toml
-            - key: message.tmpl
-              path: message.tmpl
+            {{- range $key, $value := .Values.templates }}
+            - key: {{ $key }}
+              path: {{ $key }}
+            {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
