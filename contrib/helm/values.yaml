@@ -2,76 +2,51 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-configmap:
-    # All timeouts and durations are in milliseconds.
-  app:
-    # Address of the HTTP Server.
-    address: "0.0.0.0:6000"
-    # Server timeout for HTTP requests.
-    server_timeout: "60s"
-    # Whether to log incoming HTTP requests or not.
-    enable_request_logs: true
-    # Use `debug` to enable verbose logging. Can be set to `info` otherwise.
-    log: "info"
-  providers:
-    prod_alerts:
-      # Type of provider. Currently supported value is `google_chat`.
-      type: "google_chat"
-      # Google Chat Webhook URL
-      endpoint: "https://chat.googleapis.com/v1/spaces/xxx/messages?key=key&token=token%3D"
-      # Max idle connections in the HTTP Client.
-      max_idle_conns: 50
-      # Timeout for making requests to Provider.
-      timeout: "30s"
-      # Specify `proxy_url` as your proxy endpoint to route all HTTP requests to the provider via a proxy.
-      proxy_url: "http://internal-squid-proxy.com:3128"
-      # Path to specify the message template path.
-      template: "static/message.tmpl"
-      # Timeout to keep active alerts in memory. Once this TTL expires, a new thread will be created.
-      thread_ttl: "12h"
-      # In case you're simply experimenting with calert config changes and you don't wish to send actual notifications,
-      # you can set dry_run=true in each provider.
-      dry_run: false
-    dev_alerts:
-      # Type of provider. Currently supported value is `google_chat`.
-      type: "google_chat"
-      # Google Chat Webhook URL
-      endpoint: "https://chat.googleapis.com/v1/spaces/xxx/messages?key=key&token=token%3D"
-      # Max idle connections in the HTTP Client.
-      max_idle_conns: 50
-      # Timeout for making requests to Provider.
-      timeout: "30s"
-      # Specify `proxy_url` as your proxy endpoint to route all HTTP requests to the provider via a proxy.
-      proxy_url: "http://internal-squid-proxy.com:3128"
-      # Path to specify the message template path.
-      template: "static/message.tmpl"
-      # Timeout to keep active alerts in memory. Once this TTL expires, a new thread will be created.
-      thread_ttl: "12h"
-      # In case you're simply experimenting with calert config changes and you don't wish to send actual notifications,
-      # you can set dry_run=true in each provider.
-      dry_run: false
-  rooms: |
-    [providers.calert]
-    type = "google_chat"
-    endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=key&token=token%3D"
-    max_idle_conns = 50
-    timeout = "7s"
-    #proxy_url = "http://internal-squid-proxy.com:3128"
-    template = "static/message.tmpl"
-    thread_ttl = "12h"
-    dry_run = false
+# All timeouts and durations are in milliseconds.
+app:
+  address: "0.0.0.0:6000" # Address of the HTTP Server.
+  server_timeout: "60s" # Server timeout for HTTP requests.
+  enable_request_logs: true # Whether to log incoming HTTP requests or not.
+  log: "info" # Use `debug` to enable verbose logging. Can be set to `info` otherwise.
 
-template_file: |
-  *({{.Labels.severity | toUpper }}) {{ .Labels.alertname | Title }} - {{.Status | Title }}*
-  {{ range .Annotations.SortedPairs -}}
-  {{ .Name | Title }}: {{ .Value}}
-  {{ end -}}
+# https://github.com/mr-karan/calert/blob/main/config.sample.toml
+providers: {}
+  # prod_alerts:
+  #   type: "google_chat" # Type of provider. Currently supported value is `google_chat`.
+  #   endpoint: "https://chat.googleapis.com/v1/spaces/xxx/messages?key=key&token=token%3D" # Google Chat Webhook URL
+  #   max_idle_conns:  50 # Max idle connections in the HTTP Client.
+  #   timeout: "30s" # Timeout for making requests to Provider.
+  #   proxy_url: "http://internal-squid-proxy.com:3128" # Specify `proxy_url` as your proxy endpoint to route all HTTP requests to the provider via a proxy.
+  #   template: "static/message.tmpl" # Path to specify the message template path.
+  #   thread_ttl: "12h" # Timeout to keep active alerts in memory. Once this TTL expires, a new thread will be created.
+  #   dry_run: false
+
+  # qa_alerts:
+  #   endpoint: "https://chat.googleapis.com/v1/spaces/xxx/messages?key=key&token=token%3D"
+
+  # dev_alerts:
+  #   endpoint: "https://chat.googleapis.com/v1/spaces/xxx/messages?key=key&token=token%3D"
+  #   template: "static/dev_alerts.tmpl"
+  #   dry_run: true
+
+templates: {}
+  # message.tmpl: |
+  #   *({{.Labels.severity | toUpper }}) {{ .Labels.alertname | Title }} - {{.Status | Title }}*
+  #   {{ range .Annotations.SortedPairs -}}
+  #   {{ .Name | Title }}: {{ .Value}}
+  #   {{ end -}}
+
+  # dev_alerts.tmpl: |
+  #   *({{.Labels.severity | toUpper }}) {{ .Labels.alertname | Title }} - {{.Status | Title }}*
+  #   {{ range .Annotations.SortedPairs -}}
+  #   {{ .Name | Title }}: {{ .Value}}
+  #   {{ end -}}
 
 replicaCount: 1
 
 image:
   repository: ghcr.io/mr-karan/calert
-  tag: latest
+  tag: v2.0.2
   pullPolicy: Always
 
 args:
@@ -100,3 +75,5 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+podAnnotations: {}

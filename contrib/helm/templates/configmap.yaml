@@ -8,35 +8,27 @@ metadata:
     heritage: {{ .Release.Service }}
     release: {{ .Release.Name }}
 data:
-  message.tmpl: {{- toYaml .Values.template_file | indent 4 }}
+  {{- range $key, $value := .Values.templates }}
+  {{ $key }}: |-
+    {{- $value | nindent 4 }}
+  {{- end }}
   config.toml: |
     # All timeouts and durations are in milliseconds.
+
     [app]
-    address = {{ .Values.configmap.app.address | quote }}
-    server_timeout = {{ .Values.configmap.app.server_timeout | quote }}
-    enable_request_logs = {{ .Values.configmap.app.enable_request_logs | quote }}
-    log = {{ .Values.configmap.app.enable_request_logs | quote }}
+    address = {{ .Values.app.address | quote }}
+    server_timeout = {{ .Values.app.server_timeout | quote }}
+    enable_request_logs = {{ .Values.app.enable_request_logs | quote }}
+    log = {{ .Values.app.log | quote }}
 
-    [providers.prod_alerts]
-    type = {{ .Values.configmap.providers.prod_alerts.type | quote }}
-    endpoint = {{ .Values.configmap.providers.prod_alerts.endpoint | quote }}
-    max_idle_conns = {{ .Values.configmap.providers.prod_alerts.max_idle_conns | quote }}
-    timeout = {{ .Values.configmap.providers.prod_alerts.timeout | quote }}
-    proxy_url = {{ .Values.configmap.providers.prod_alerts.proxy_url | quote }}
-    template = {{ .Values.configmap.providers.prod_alerts.template | quote }}
-    thread_ttl = {{ .Values.configmap.providers.prod_alerts.thread_ttl | quote }}
-    dry_run = {{ .Values.configmap.providers.prod_alerts.dry_run | quote }}
-
-    [providers.dev_alerts]
-    type = {{ .Values.configmap.providers.dev_alerts.type | quote }}
-    endpoint = {{ .Values.configmap.providers.dev_alerts.endpoint | quote }}
-    max_idle_conns = {{ .Values.configmap.providers.dev_alerts.max_idle_conns | quote }}
-    timeout = {{ .Values.configmap.providers.dev_alerts.timeout | quote }}
-    proxy_url = {{ .Values.configmap.providers.dev_alerts.proxy_url | quote }}
-    template = {{ .Values.configmap.providers.dev_alerts.template | quote }}
-    thread_ttl = {{ .Values.configmap.providers.dev_alerts.thread_ttl | quote }}
-    dry_run = {{ .Values.configmap.providers.dev_alerts.dry_run | quote }}
-
-    {{- with .Values.configmap.rooms }}
-    {{ tpl . $ | indent 4 }}
+    {{- range $key, $value := .Values.providers }}
+    [providers.{{ $key }}]
+    type = {{ $value.type | default "google_chat" | quote }}
+    endpoint = {{ required "setting a endpoint for providers is requiered" $value.endpoint | quote }}
+    max_idle_conns = {{ $value.max_idle_conns | default "50" }}
+    timeout = {{ $value.timeout | default "30s" | quote }}
+    proxy_url = {{ $value.proxy_url | default "" | quote }}
+    template = {{ $value.template | default "static/message.tmpl" | quote }}
+    thread_ttl = {{ $value.thread_ttl | default "12h" | quote }}
+    dry_run = {{ $value.dry_run | default "false" | quote }}
     {{- end }}
