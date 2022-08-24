@@ -29,7 +29,7 @@ config:
 
 The following tables lists the configurable parameters of the chart and their default values.
 
-Change the values according to the need of the environment in ``contrib/helm/values.yaml`` file.
+Change the values according to the need of the environment in ``contrib/helm/calert/values.yaml`` file.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
