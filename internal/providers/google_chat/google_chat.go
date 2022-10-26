@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"text/template"
 	"time"
@@ -69,7 +70,7 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 	}
 
 	// Load the template.
-	tmpl, err := template.New("message.tmpl").Funcs(templateFuncMap).ParseFiles(opts.Template)
+	tmpl, err := template.New(filepath.Base(opts.Template)).Funcs(templateFuncMap).ParseFiles(opts.Template)
 	if err != nil {
 		return nil, err
 	}
