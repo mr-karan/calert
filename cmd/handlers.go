@@ -102,14 +102,15 @@ func handleDispatchNotif(w http.ResponseWriter, r *http.Request) {
 	app.lo.WithField("receiver", roomName).Info("dispatching new alert")
 
 	// Dispatch a list of alerts via Notifier.
-	if err := app.notifier.Dispatch(payload.Alerts, roomName); err != nil {
-		app.lo.WithError(err).Error("error dispatching alerts")
-		app.metrics.Increment(`http_request_errors_total{handler="dispatch"}`)
-		sendErrorResponse(w, "Error dispatching alerts.", http.StatusInternalServerError, nil)
-		return
-	}
-
-	app.metrics.Duration(`http_request_duration_seconds{handler="dispatch"}`, now)
+	// If there are a lot of alerts (>=10) to push, G-Chat API can be extremely slow to add messages
+	// to an existing thread. So it's better to enqueue it in background.
+	go func() {
+		if err := app.notifier.Dispatch(payload.Alerts, roomName); err != nil {
+			app.lo.WithError(err).Error("error dispatching alerts")
+			app.metrics.Increment(`http_request_errors_total{handler="dispatch"}`)
+		}
+		app.metrics.Duration(`http_request_duration_seconds{handler="dispatch"}`, now)
+	}()
 
 	sendResponse(w, "dispatched")
 }
