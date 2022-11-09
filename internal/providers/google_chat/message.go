@@ -77,6 +77,7 @@ func (m *GoogleChatManager) sendMessage(msg ChatMessage, threadKey string) error
 	req.Header.Set("Content-Type", "application/json")
 
 	// Send the request.
+	m.lo.WithField("url", endpoint).WithField("msg", msg.Text).Debug("sending alert")
 	resp, err := m.client.Do(req)
 	if err != nil {
 		return err
