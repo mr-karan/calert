@@ -126,6 +126,7 @@ func (m *GoogleChatManager) Push(alerts []alertmgrtmpl.Alert) error {
 			if m.dryRun {
 				m.lo.WithField("room", m.Room()).Info("dry_run is enabled for this room. skipping pushing notification")
 			} else {
+				m.lo.WithField("room", m.Room()).WithField("threadkey", threadKey).Debug("sending message")
 				if err := m.sendMessage(msg, threadKey); err != nil {
 					m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_errors_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
 					m.lo.WithError(err).Error("error sending message")
