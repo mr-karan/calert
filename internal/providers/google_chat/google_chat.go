@@ -101,6 +101,7 @@ func (m *GoogleChatManager) Push(alerts []alertmgrtmpl.Alert) error {
 
 	// For each alert, lookup the UUID and send the alert.
 	for _, a := range alerts {
+		m.lo.WithField("fingerprint", a.Fingerprint).WithField("room", m.Room()).Debug("processing alert")
 		// If it's a new alert whose fingerprint isn't in the active alerts map, add it first.
 		if m.activeAlerts.loookup(a.Fingerprint) == "" {
 			m.activeAlerts.add(a)
