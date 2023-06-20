@@ -53,6 +53,7 @@ Change the values according to the need of the environment in ``contrib/helm/cal
 | resources.limits.memory | string | `"48Mi"` |  |
 | resources.requests.cpu | string | `"5m"` |  |
 | resources.requests.memory | string | `"24Mi"` |  |
+| priorityClassName | string | `""` |  |
 | nodeSelector | object | `{}` |  |
 | tolerations | list | `[]` |  |
 | affinity | object | `{}` |  |

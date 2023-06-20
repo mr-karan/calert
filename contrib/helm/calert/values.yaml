@@ -70,6 +70,8 @@ resources:
     cpu: 5m
     memory: 24Mi
 
+priorityClassName: ""
+
 nodeSelector: {}
 
 tolerations: []
