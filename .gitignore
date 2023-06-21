@@ -19,3 +19,4 @@ config.toml
 bin/
 data/
 dist/
+*.idea/
