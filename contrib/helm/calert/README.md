@@ -57,4 +57,5 @@ Change the values according to the need of the environment in ``contrib/helm/cal
 | nodeSelector | object | `{}` |  |
 | tolerations | list | `[]` |  |
 | affinity | object | `{}` |  |
+| topologySpreadConstraints | list | `[]` |  |
 | podAnnotations | object | `{}` |  |
