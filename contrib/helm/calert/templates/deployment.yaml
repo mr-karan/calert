@@ -43,6 +43,12 @@ spec:
             {{- range .Values.args }}
             - {{ . | quote }}
             {{- end }}
+        {{- if .Values.securityContext.enabled }}
+          {{- with omit .Values.securityContext "enabled" "runAsGroup" "runAsUser" "runAsNonRoot" "windowsOptions" }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
           ports:
           - containerPort: {{ .Values.service.port }}
             protocol: TCP
