@@ -91,6 +91,8 @@ securityContext:
   runAsUser: 1001
   runAsGroup: 1001
   readOnlyRootFilesystem: true
+  seccompProfile:
+    type: RuntimeDefault
   windowsOptions:
     hostProcess: false
   capabilities:
