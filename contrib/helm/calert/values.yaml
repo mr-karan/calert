@@ -83,7 +83,7 @@ topologySpreadConstraints: []
 podAnnotations: {}
 
 securityContext:
-  enabled: true
+  enabled: false
 
   privileged: false
   allowPrivilegeEscalation: false
