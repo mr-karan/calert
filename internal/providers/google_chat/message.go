@@ -66,6 +66,7 @@ func (m *GoogleChatManager) sendMessage(msg ChatMessage, threadKey string) error
 	}
 	q := u.Query()
 	q.Set("threadKey", threadKey)
+	q.Set("messageReplyOption", "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD")
 	u.RawQuery = q.Encode()
 	endpoint := u.String()
 
