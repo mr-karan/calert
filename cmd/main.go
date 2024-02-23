@@ -2,13 +2,14 @@ package main
 
 import (
 	"net/http"
+	"os"
 
-	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/mr-karan/calert/internal/metrics"
 	"github.com/mr-karan/calert/internal/notifier"
 
-	"github.com/sirupsen/logrus"
+	"log/slog"
 )
 
 var (
@@ -19,31 +20,41 @@ var (
 // App is the global contains
 // instances of various objects used in the lifecyle of program.
 type App struct {
-	lo       *logrus.Logger
+	lo       *slog.Logger
 	metrics  *metrics.Manager
 	notifier notifier.Notifier
 }
 
 func main() {
-	// Initialise logger.
-	lo := initLogger()
-
 	// Initialise and load the config.
-	ko, err := initConfig(lo, "config.sample.toml", "CALERT_")
+	ko, err := initConfig("config.sample.toml", "CALERT_")
 	if err != nil {
-		// Need to `panic` since logger can only be initialised once config is initialised.
 		panic(err.Error())
 	}
 
 	var (
-		metrics  = initMetrics()
-		provs    = initProviders(ko, lo, metrics)
-		notifier = initNotifier(ko, lo, provs)
+		metrics = initMetrics()
 	)
 
-	// Enable debug mode if specified.
+	// Initialise logger.
+	verbose := false
 	if ko.String("app.log") == "debug" {
-		lo.SetLevel(logrus.DebugLevel)
+		verbose = true
+	}
+	lo := initLogger(verbose)
+
+	// Initialise providers.
+	provs, err := initProviders(ko, lo, metrics)
+	if err != nil {
+		lo.Error("error initialising providers", "error", err)
+		exit()
+	}
+
+	// Initialise notifier.
+	notifier, err := initNotifier(ko, lo, provs)
+	if err != nil {
+		lo.Error("error initialising notifier", "error", err)
+		exit()
 	}
 
 	app := &App{
@@ -52,7 +63,7 @@ func main() {
 		metrics:  metrics,
 	}
 
-	app.lo.WithField("version", buildString).Info("booting calert")
+	app.lo.Info("starting calert", "version", buildString, "verbose", verbose)
 
 	// Initialise HTTP Router.
 	r := chi.NewRouter()
@@ -70,7 +81,7 @@ func main() {
 	r.Post("/dispatch", wrap(app, handleDispatchNotif))
 
 	// Start HTTP Server.
-	app.lo.WithField("addr", ko.MustString("app.address")).Info("starting http server")
+	app.lo.Info("starting http server", "address", ko.MustString("app.address"))
 	srv := &http.Server{
 		Addr:         ko.MustString("app.address"),
 		ReadTimeout:  ko.MustDuration("app.server_timeout"),
@@ -78,6 +89,11 @@ func main() {
 		Handler:      r,
 	}
 	if err := srv.ListenAndServe(); err != nil {
-		app.lo.WithError(err).Fatal("couldn't start server")
+		app.lo.Error("couldn't start server", "error", err)
+		exit()
 	}
+}
+
+func exit() {
+	os.Exit(1)
 }

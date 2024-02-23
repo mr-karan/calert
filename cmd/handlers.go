@@ -88,7 +88,7 @@ func handleDispatchNotif(w http.ResponseWriter, r *http.Request) {
 
 	// Unmarshall POST Body.
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		app.lo.WithError(err).Error("error decoding request body")
+		app.lo.Error("error decoding request body", "error", err)
 		app.metrics.Increment(`http_request_errors_total{handler="dispatch"}`)
 		sendErrorResponse(w, "Error decoding payload.", http.StatusBadRequest, nil)
 		return
@@ -99,14 +99,14 @@ func handleDispatchNotif(w http.ResponseWriter, r *http.Request) {
 		roomName = payload.Receiver
 	}
 
-	app.lo.WithField("receiver", roomName).Info("dispatching new alert")
+	app.lo.Info("dispatching new alert", "room", roomName, "count", len(payload.Alerts))
 
 	// Dispatch a list of alerts via Notifier.
 	// If there are a lot of alerts (>=10) to push, G-Chat API can be extremely slow to add messages
 	// to an existing thread. So it's better to enqueue it in background.
 	go func() {
 		if err := app.notifier.Dispatch(payload.Alerts, roomName); err != nil {
-			app.lo.WithError(err).Error("error dispatching alerts")
+			app.lo.Error("error dispatching alerts", "error", err)
 			app.metrics.Increment(`http_request_errors_total{handler="dispatch"}`)
 		}
 		app.metrics.Duration(`http_request_duration_seconds{handler="dispatch"}`, now)

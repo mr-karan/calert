@@ -2,6 +2,7 @@ package google_chat
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -11,11 +12,12 @@ import (
 
 	"github.com/mr-karan/calert/internal/metrics"
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
-	"github.com/sirupsen/logrus"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type GoogleChatManager struct {
-	lo           *logrus.Logger
+	lo           *slog.Logger
 	metrics      *metrics.Manager
 	activeAlerts *ActiveAlerts
 	endpoint     string
@@ -26,7 +28,7 @@ type GoogleChatManager struct {
 }
 
 type GoogleChatOpts struct {
-	Log         *logrus.Logger
+	Log         *slog.Logger
 	Metrics     *metrics.Manager
 	DryRun      bool
 	MaxIdleConn int
@@ -64,7 +66,11 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 
 	// Initialise message template functions.
 	templateFuncMap := template.FuncMap{
-		"Title":    strings.Title,
+		"Title": func(s string) string {
+			// Create a Title cased string respecting Unicode rules.
+			titleCaser := cases.Title(language.English)
+			return titleCaser.String(s)
+		},
 		"toUpper":  strings.ToUpper,
 		"Contains": strings.Contains,
 	}
@@ -97,7 +103,7 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 
 // Push accepts the list of alerts and dispatches them to Webhook API endpoint.
 func (m *GoogleChatManager) Push(alerts []alertmgrtmpl.Alert) error {
-	m.lo.WithField("count", len(alerts)).Info("dispatching alerts to google chat")
+	m.lo.Info("dispatching alerts to google chat", "count", len(alerts))
 
 	// For each alert, lookup the UUID and send the alert.
 	for _, a := range alerts {
@@ -109,7 +115,7 @@ func (m *GoogleChatManager) Push(alerts []alertmgrtmpl.Alert) error {
 		// Prepare a list of messages to send.
 		msgs, err := m.prepareMessage(a)
 		if err != nil {
-			m.lo.WithError(err).Error("error preparing message")
+			m.lo.Error("error preparing message", "error", err)
 			continue
 		}
 
@@ -124,11 +130,11 @@ func (m *GoogleChatManager) Push(alerts []alertmgrtmpl.Alert) error {
 
 			// Send message to API.
 			if m.dryRun {
-				m.lo.WithField("room", m.Room()).Info("dry_run is enabled for this room. skipping pushing notification")
+				m.lo.Info("dry_run is enabled for this room. skipping pushing notification", "room", m.Room())
 			} else {
 				if err := m.sendMessage(msg, threadKey); err != nil {
 					m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_errors_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
-					m.lo.WithError(err).Error("error sending message")
+					m.lo.Error("error sending message", "error", err)
 					continue
 				}
 			}

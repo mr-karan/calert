@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -13,24 +15,24 @@ import (
 	"github.com/mr-karan/calert/internal/notifier"
 	prvs "github.com/mr-karan/calert/internal/providers"
 	"github.com/mr-karan/calert/internal/providers/google_chat"
-	"github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
 )
 
 // initLogger initializes logger instance.
-func initLogger() *logrus.Logger {
-	logger := logrus.New()
+func initLogger(verbose bool) *slog.Logger {
+	lvl := slog.LevelInfo
+	if verbose {
+		lvl = slog.LevelDebug
+	}
 
-	logger.SetFormatter(&logrus.TextFormatter{
-		FullTimestamp:          true,
-		DisableLevelTruncation: true,
-	})
-
-	return logger
+	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level:     lvl,
+		AddSource: true,
+	}))
 }
 
 // initConfig loads config to `ko` object.
-func initConfig(lo *logrus.Logger, cfgDefault string, envPrefix string) (*koanf.Koanf, error) {
+func initConfig(cfgDefault string, envPrefix string) (*koanf.Koanf, error) {
 	var (
 		ko = koanf.New(".")
 		f  = flag.NewFlagSet("front", flag.ContinueOnError)
@@ -52,19 +54,19 @@ func initConfig(lo *logrus.Logger, cfgDefault string, envPrefix string) (*koanf.
 	}
 
 	// Load the config files from the path provided.
-	lo.WithField("path", *cfgPath).Info("attempting to load config from file")
+	log.Printf("attempting to load config from file: %s\n", *cfgPath)
 
 	err = ko.Load(file.Provider(*cfgPath), toml.Parser())
 	if err != nil {
 		// If the default config is not present, print a warning and continue reading the values from env.
 		if *cfgPath == cfgDefault {
-			lo.WithError(err).Warn("unable to open sample config file")
+			log.Printf("unable to open config file: %w falling back to env vars\n", err.Error())
 		} else {
 			return nil, err
 		}
 	}
 
-	lo.Info("attempting to read config from env vars")
+	log.Println("attempting to read config from env vars")
 	// Load environment variables if the key is given
 	// and merge into the loaded config.
 	if envPrefix != "" {
@@ -81,7 +83,7 @@ func initConfig(lo *logrus.Logger, cfgDefault string, envPrefix string) (*koanf.
 }
 
 // initProviders loads all the providers specified in the config.
-func initProviders(ko *koanf.Koanf, lo *logrus.Logger, metrics *metrics.Manager) []prvs.Provider {
+func initProviders(ko *koanf.Koanf, lo *slog.Logger, metrics *metrics.Manager) ([]prvs.Provider, error) {
 	provs := make([]prvs.Provider, 0)
 
 	// Loop over all providers listed in config.
@@ -106,32 +108,32 @@ func initProviders(ko *koanf.Koanf, lo *logrus.Logger, metrics *metrics.Manager)
 				},
 			)
 			if err != nil {
-				lo.WithError(err).Fatal("error initialising google chat provider")
+				return nil, fmt.Errorf("error initialising google chat provider: %s", err)
 			}
 
-			lo.WithField("room", gchat.Room()).Info("initialised provider")
+			lo.Info("initialised provider", "room", gchat.Room())
 			provs = append(provs, gchat)
 		}
 	}
 
 	if len(provs) == 0 {
-		lo.Fatal("no providers listed in config")
+		return nil, fmt.Errorf("no providers listed in config")
 	}
 
-	return provs
+	return provs, nil
 }
 
 // initNotifier initializes a Notifier instance.
-func initNotifier(ko *koanf.Koanf, lo *logrus.Logger, provs []prvs.Provider) notifier.Notifier {
+func initNotifier(ko *koanf.Koanf, lo *slog.Logger, provs []prvs.Provider) (notifier.Notifier, error) {
 	n, err := notifier.Init(notifier.Opts{
 		Providers: provs,
 		Log:       lo,
 	})
 	if err != nil {
-		lo.WithError(err).Fatal("error initialising notifier")
+		return notifier.Notifier{}, fmt.Errorf("error initialising notifier: %s", err)
 	}
 
-	return n
+	return n, err
 }
 
 // initMetrics initializes a Metrics manager.

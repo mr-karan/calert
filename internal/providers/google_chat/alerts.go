@@ -1,19 +1,19 @@
 package google_chat
 
 import (
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/gofrs/uuid"
 	"github.com/mr-karan/calert/internal/metrics"
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
-	"github.com/sirupsen/logrus"
 )
 
 // ActiveAlerts represents a map of alerts unique fingerprint hash
 // with their details.
 type ActiveAlerts struct {
-	lo      *logrus.Logger
+	lo      *slog.Logger
 	metrics *metrics.Manager
 	sync.RWMutex
 	alerts map[string]AlertDetails
@@ -82,7 +82,7 @@ func (d *ActiveAlerts) Prune(ttl time.Duration) {
 	for k, a := range d.alerts {
 		// If the alert creation field is past our specified TTL, remove it from the map.
 		if a.StartsAt.Before(expired) {
-			d.lo.WithField("fingerprint", k).WithField("created", a.StartsAt).WithField("expired", expired).Debug("removing alert from active alerts")
+			d.lo.Debug("removing alert from active alerts", "fingerprint", k, "created", a.StartsAt, "expired", expired)
 			delete(d.alerts, k)
 		}
 	}

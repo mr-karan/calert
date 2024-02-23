@@ -3,7 +3,8 @@ package google_chat
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -30,7 +31,7 @@ func (m *GoogleChatManager) prepareMessage(alert alertmgrtmpl.Alert) ([]ChatMess
 	// Render a template with alert data.
 	err := m.msgTmpl.Execute(&to, alert)
 	if err != nil {
-		m.lo.WithError(err).Error("Error parsing values in template")
+		m.lo.Error("Error parsing values in template", "error", err)
 		return messages, err
 	}
 
@@ -78,7 +79,7 @@ func (m *GoogleChatManager) sendMessage(msg ChatMessage, threadKey string) error
 	req.Header.Set("Content-Type", "application/json")
 
 	// Send the request.
-	m.lo.WithField("url", endpoint).WithField("msg", msg.Text).Debug("sending alert")
+	m.lo.Debug("sending alert", "url", endpoint, "msg", msg.Text)
 	resp, err := m.client.Do(req)
 	if err != nil {
 		return err
@@ -87,8 +88,27 @@ func (m *GoogleChatManager) sendMessage(msg ChatMessage, threadKey string) error
 
 	// If response is non 200, log and throw the error.
 	if resp.StatusCode != http.StatusOK {
-		m.lo.WithField("status", resp.StatusCode).Error("Non OK HTTP Response received from Google Chat Webhook endpoint")
-		return errors.New("non ok response from gchat")
+		// Read the response body
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			// Log the error if unable to read the response body
+			m.lo.Error("Failed to read response body", "error", err)
+			return fmt.Errorf("failed to read response body")
+		}
+		// Ensure the original response body is closed
+		defer resp.Body.Close()
+
+		// Convert the body bytes to a string for logging
+		responseBody := string(bodyBytes)
+
+		// Log the status code and response body at the debug level
+		m.lo.Debug("Non OK HTTP Response received from Google Chat Webhook endpoint", "status", resp.StatusCode, "responseBody", responseBody)
+
+		// Since the body has been read, if you need to use it later,
+		// you may need to reassign resp.Body with a new reader
+		resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		return fmt.Errorf("non ok response from gchat")
 	}
 
 	return nil

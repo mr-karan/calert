@@ -11,7 +11,7 @@ build: ## Build binary.
 
 .PHONY: run
 run: ## Run binary.
-	./${APP-BIN}
+	./${APP-BIN} --config ./config.toml
 
 .PHONY: clean
 clean: ## Remove temporary files and the `bin` folder.
@@ -27,10 +27,10 @@ lint:
 .PHONY: dev-docker
 dev-docker: clean build ## Build and spawns docker containers for the entire suite (Alertmanager/Prometheus/calert).
 	cd dev; \
-	docker-compose build ; \
-	CURRENT_UID=$(id -u):$(id -g) docker-compose up
+	echo "Current UID: $(shell id -u):$(shell id -g)"; \
+	CURRENT_UID=$(shell id -u):$(shell id -g) docker compose up
 
 .PHONY: rm-dev-docker
 rm-dev-docker: clean build ## Delete the docker containers including volumes.
 	cd dev; \
-	docker-compose down -v ; \
+	docker compose down -v ; \

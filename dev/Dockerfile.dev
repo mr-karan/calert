@@ -1,4 +1,15 @@
-FROM golang:1.18 as builder
-# Disable CGO
+FROM golang:1.22 as builder
+
 ENV CGO_ENABLED=0
 WORKDIR /app
+
+# Prepare cache directories and ensure correct permissions
+RUN mkdir -p /app/.cache/go-build /app/.cache/go-mod && \
+    chown -R 1000:1000 /app/.cache
+
+# Switch to non-root user
+USER 1000:1000
+
+# Set environment variables for caches
+ENV GOCACHE=/app/.cache/go-build
+ENV GOMODCACHE=/app/.cache/go-mod

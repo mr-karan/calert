@@ -1,18 +1,20 @@
 package google_chat
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
+	"log/slog"
+
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGoogleChatTemplate(t *testing.T) {
 
 	opts := &GoogleChatOpts{
-		Log:      logrus.New(),
+		Log:      slog.New(slog.NewJSONHandler(os.Stdout, nil)),
 		Endpoint: "http://",
 		Room:     "qa",
 		Template: "../../../static/message.tmpl",

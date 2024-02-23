@@ -3,7 +3,7 @@ networks:
     driver: bridge
 
 volumes:
-    prometheus_data: {}
+  prometheus_data: {}
 
 services:
 
@@ -11,18 +11,20 @@ services:
     build:
       context: ../
       dockerfile: dev/Dockerfile.dev
-    command: ["make", "fresh"]
+    command: [ "make", "fresh" ]
     ports:
       - "6000:6000"
     volumes:
       - ../:/app
-      - $GOPATH/pkg/mod/cache:/go/pkg/mod/cache
     networks:
       - monitor-net
     user: ${CURRENT_UID}
+    environment:
+      - GOCACHE=/app/.cache/go-build
+      - GOMODCACHE=/app/.cache/go-mod
 
   alertmanager:
-    image: prom/alertmanager:v0.23.0
+    image: prom/alertmanager:v0.26.0
     container_name: alertmanager
     volumes:
       - ./alertmanager:/etc/alertmanager
@@ -38,7 +40,7 @@ services:
       - calert
 
   prometheus:
-    image: prom/prometheus:v2.32.1
+    image: prom/prometheus:v2.50.0
     container_name: prometheus
     volumes:
       - ./prometheus:/etc/prometheus

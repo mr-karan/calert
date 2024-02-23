@@ -20,3 +20,4 @@ bin/
 data/
 dist/
 *.idea/
+.cache/
