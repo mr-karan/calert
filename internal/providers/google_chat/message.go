@@ -66,8 +66,13 @@ func (m *GoogleChatManager) sendMessage(msg ChatMessage, threadKey string) error
 		return err
 	}
 	q := u.Query()
-	q.Set("threadKey", threadKey)
-	q.Set("messageReplyOption", "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD")
+	// Default behaviour is to start a new thread for every alert.
+	q.Set("messageReplyOption", "MESSAGE_REPLY_OPTION_UNSPECIFIED")
+	if m.threadedReplies {
+		// If threaded replies are enabled, use the threadKey to reply to the same thread.
+		q.Set("messageReplyOption", "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD")
+		q.Set("threadKey", threadKey)
+	}
 	u.RawQuery = q.Encode()
 	endpoint := u.String()
 
