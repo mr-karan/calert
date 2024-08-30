@@ -1,3 +1,5 @@
+version: 2
+
 env:
   - GO111MODULE=on
   - CGO_ENABLED=0
@@ -26,7 +28,7 @@ archives:
 
 dockers:
   - # ID of the image, needed if you want to filter by it later on (e.g. on custom publishers).
-    id: calert
+    id: calert-amd64
 
     # GOOS of the built binaries/packages that should be used.
     goos: linux
@@ -40,8 +42,8 @@ dockers:
 
     # Templates of the Docker image names.
     image_templates:
-      - "ghcr.io/mr-karan/calert:{{ .Tag }}"
-      - "ghcr.io/mr-karan/calert:latest"
+      - "ghcr.io/mr-karan/calert:{{ .Tag }}-amd64"
+      - "ghcr.io/mr-karan/calert:latest-amd64"
 
     # Skips the docker push.
     # Could be useful if you also do draft releases.
@@ -82,3 +84,36 @@ dockers:
     extra_files:
       - config.sample.toml
       - static/
+  - # Make an additional template for arm64
+    id: calert-arm64
+    goos: linux
+    goarch: arm64
+    ids:
+      - calert
+    image_templates:
+      - "ghcr.io/mr-karan/calert:{{ .Tag }}-arm64"
+      - "ghcr.io/mr-karan/calert:latest-arm64"
+    skip_push: false
+    dockerfile: Dockerfile
+    use: docker
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--platform=linux/arm64"
+    extra_files:
+      - config.sample.toml
+      - static/
+
+# Make a manifest with both architectures
+docker_manifests:
+  - name_template: "ghcr.io/mr-karan/calert:{{ .Tag }}"
+    image_templates:
+      - "ghcr.io/mr-karan/calert:{{ .Tag }}-amd64"
+      - "ghcr.io/mr-karan/calert:{{ .Tag }}-arm64"
+  - name_template: "ghcr.io/mr-karan/calert:latest"
+    image_templates:
+      - "ghcr.io/mr-karan/calert:{{ .Tag }}-amd64"
+      - "ghcr.io/mr-karan/calert:{{ .Tag }}-arm64"
