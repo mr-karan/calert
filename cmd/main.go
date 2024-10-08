@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"net/http"
 	"os"
 
@@ -8,8 +9,6 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/mr-karan/calert/internal/metrics"
 	"github.com/mr-karan/calert/internal/notifier"
-
-	"log/slog"
 )
 
 var (
@@ -83,6 +82,11 @@ func main() {
 	// Start HTTP Server.
 	app.lo.Info("starting http server", "address", ko.MustString("app.address"))
 	srv := &http.Server{
+		// http.Server does not support structured logging. The best we can do
+		// is to use our structured logger at a fixed log level. The "msg" field
+		// will contain the whole log message, but at least any error log from
+		// http.Server will be a JSON object, as the rest of the logs.
+		ErrorLog:     slog.NewLogLogger(lo.Handler(), slog.LevelError),
 		Addr:         ko.MustString("app.address"),
 		ReadTimeout:  ko.MustDuration("app.server_timeout"),
 		WriteTimeout: ko.MustDuration("app.server_timeout"),
