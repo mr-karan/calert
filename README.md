@@ -28,6 +28,8 @@ You can find the list of docker images [here](https://github.com/mr-karan/calert
 docker pull ghcr.io/mr-karan/calert:latest
 ```
 
+#### Custom Message Template
+
 Here's an example `docker-compose` config with a custom `message.tmpl` mounted inside the container:
 
 ```yml
@@ -37,6 +39,18 @@ Here's an example `docker-compose` config with a custom `message.tmpl` mounted i
       - "6000:6000"
     volumes:
       - ./message.tmpl:/etc/calert/message.tmpl
+```
+
+#### Custom Configuration 
+
+Here's an example `docker-compose` config with a custom `config.toml` mounted inside the container:
+```yml
+  calert:
+    image: ghcr.io/mr-karan/calert:latest
+    ports:
+      - "6000:6000"
+    volumes:
+      - ./config.toml:/app/config.sample.toml
 ```
 
 ### Configuration
