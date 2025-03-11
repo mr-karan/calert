@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
 	"time"
@@ -75,6 +76,10 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 		},
 		"toUpper":  strings.ToUpper,
 		"Contains": strings.Contains,
+		"reReplaceAll": func(pattern, repl, text string) string {
+			re := regexp.MustCompile(pattern)
+			return re.ReplaceAllString(text, repl)
+		},
 	}
 
 	// Load the template.
