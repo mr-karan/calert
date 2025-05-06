@@ -30,5 +30,6 @@ data:
     proxy_url = {{ $value.proxy_url | default "" | quote }}
     template = {{ $value.template | default "static/message.tmpl" | quote }}
     thread_ttl = {{ $value.thread_ttl | default "12h" | quote }}
+    threaded_replies = {{ $value.threaded_replies | default "true" | quote }}
     dry_run = {{ $value.dry_run | default "false" | quote }}
     {{- end }}
