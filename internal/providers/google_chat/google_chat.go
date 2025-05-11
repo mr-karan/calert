@@ -80,6 +80,35 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 			re := regexp.MustCompile(pattern)
 			return re.ReplaceAllString(text, repl)
 		},
+		"CurrentTime": func(location ...string) string {
+			if len(location) == 0 || location[0] == "" {
+				// If timezone is not provided return current time in UTC.
+				return time.Now().Format("2006-01-02 15:04:05.000 -0700 MST")
+			} else {
+				loc, err := time.LoadLocation(location[0])
+				if err != nil {
+					return fmt.Sprintf("Error loading timezone: %v", err)
+				}
+				// Return the current time in the specified timezone.
+				return time.Now().In(loc).Format("Mon, 02 Jan 2006 3:04:05 PM MST")
+			}
+		},
+		"ConvertTZ": func(t time.Time, location string) (string, error) {
+			// Load the specified timezone.
+			loc, err := time.LoadLocation(location)
+			if err != nil {
+				return "Error loading timezone", err
+			}
+			// Convert the time to the specified timezone.
+			return t.In(loc).Format("Mon, 02 Jan 2006 3:04:05 PM MST"), nil
+		},
+		"DurationSince": func(pastTime time.Time) string {
+			duration := time.Since(pastTime)
+			hours := int(duration.Hours())
+			minutes := int(duration.Minutes()) % 60
+			seconds := int(duration.Seconds()) % 60
+			return fmt.Sprintf("%dh %dm %ds", hours, minutes, seconds)
+		},
 	}
 
 	// Load the template.
