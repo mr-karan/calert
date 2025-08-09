@@ -56,10 +56,10 @@ spec:
           - name: config-dir
             mountPath: /app/config.toml
             subPath: config.toml
-          {{- range $key := .Values.templates }}
+          {{- range $filename, $_ := .Values.templates }}
           - name: config-dir
-            mountPath: /app/static/{{ $key }}
-            subPath: {{ $key }}
+            mountPath: /app/static/{{ $filename }}
+            subPath: {{ $filename }}
           {{- end }}
           livenessProbe:
             httpGet:
