@@ -50,7 +50,7 @@ image:
   pullPolicy: Always
 
 args:
-- "--config=/app/static/config.toml"
+- "--config=/app/config.toml"
 
 nameOverride: ""
 fullnameOverride: ""
