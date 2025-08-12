@@ -6,6 +6,27 @@ A Helm chart for the calert which uses Alertmanager webhook receiver to receive 
 
 **Source Code:** <https://github.com/mr-karan/calert>
 
+# Installation
+
+## Add Helm repository
+
+```bash
+helm repo add calert https://mr-karan.github.io/calert/charts
+helm repo update
+```
+
+## Install the chart
+
+```bash
+helm install calert calert/calert
+```
+
+## Install with custom values
+
+```bash
+helm install calert calert/calert -f values.yaml
+```
+
 # Alertmanager Integration
 
 The Alertmanager helm chart can be found [here](https://github.com/prometheus-community/helm-charts/tree/main/charts/alertmanager). You can refer to the following config block to route webhook alerts to `calert`:
