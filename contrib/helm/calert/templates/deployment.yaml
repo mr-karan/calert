@@ -53,8 +53,14 @@ spec:
           - containerPort: {{ .Values.service.port }}
             protocol: TCP
           volumeMounts:
-          - mountPath: /app/static/
-            name: config-dir
+          - name: config-dir
+            mountPath: /app/config.toml
+            subPath: config.toml
+          {{- range $filename, $_ := .Values.templates }}
+          - name: config-dir
+            mountPath: /app/static/{{ $filename }}
+            subPath: {{ $filename }}
+          {{- end }}
           livenessProbe:
             httpGet:
               httpHeaders:
@@ -81,13 +87,6 @@ spec:
         - name: config-dir
           configMap:
             name: {{ template "calert.fullname" . }}-config
-            items:
-            - key: config.toml
-              path: config.toml
-            {{- range $key, $value := .Values.templates }}
-            - key: {{ $key }}
-              path: {{ $key }}
-            {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
