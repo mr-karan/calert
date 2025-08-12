@@ -76,4 +76,29 @@ entries:
     urls:
     - https://mr-karan.github.io/calert/charts/calert-v2.0.7.tgz
     version: v2.0.7
-generated: "2024-03-13T05:42:45.292916572Z"
+  - apiVersion: v2
+    appVersion: v0.2.2
+    created: "2025-08-12T06:51:11.517324405Z"
+    description: A Helm chart for the calert which uses Alertmanager webhook receiver
+      to receive alerts payload, and pushes this data to Google Chat webhook endpoint.
+    digest: bfb15b3a057d36908319d00f10fb71be79c02cdbfa421b9479fe99ece037029e
+    home: https://github.com/mr-karan/calert
+    keywords:
+    - monitoring
+    - alerting
+    - prometheus
+    - alertmanager
+    - alertmanager-webhook
+    - google-chat
+    maintainers:
+    - email: hello@mrkaran.dev
+      name: Karan Sharma
+      url: https://github.com/mr-karan
+    name: calert
+    sources:
+    - https://github.com/mr-karan/calert
+    type: application
+    urls:
+    - https://mr-karan.github.io/calert/charts/calert-v0.2.2.tgz
+    version: v0.2.2
+generated: "2025-08-12T06:51:11.516152791Z"
