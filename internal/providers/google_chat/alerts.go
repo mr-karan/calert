@@ -8,6 +8,7 @@ import (
 	"github.com/gofrs/uuid"
 	"github.com/mr-karan/calert/internal/metrics"
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
+	chatv1 "google.golang.org/api/chat/v1"
 )
 
 // ActiveAlerts represents a map of alerts unique fingerprint hash
@@ -26,12 +27,8 @@ type AlertDetails struct {
 	UUID     uuid.UUID
 }
 
-// ChatMessage represents the structure for sending a
-// Text message in Google Chat Webhook endpoint.
-// https://developers.google.com/chat/api/guides/message-formats/basic
-type ChatMessage struct {
-	Text string `json:"text"`
-}
+// https://github.com/googleapis/google-api-go-client/blob/main/chat/v1/chat-gen.go
+type ChatMessage = chatv1.Message
 
 // add adds an alert to the active alerts map.
 func (d *ActiveAlerts) add(a alertmgrtmpl.Alert) error {
