@@ -37,10 +37,12 @@ func (m *GoogleChatManager) prepareMessage(alert alertmgrtmpl.Alert) ([]ChatMess
 		m.lo.Error("Error parsing values in template", "error", err)
 		return messages, err
 	}
-	err = m.msgTmpl.ExecuteTemplate(&toCard, "cardsV2", alert)
-	if err != nil {
-		m.lo.Error("Error parsing values in template", "error", err)
-		return messages, err
+	if m.msgTmpl.Lookup("cardsV2") != nil {
+		err = m.msgTmpl.ExecuteTemplate(&toCard, "cardsV2", alert)
+		if err != nil {
+			m.lo.Error("Error parsing values in template", "error", err)
+			return messages, err
+		}
 	}
 
 	// Split the message if it exceeds the limit.
@@ -51,18 +53,20 @@ func (m *GoogleChatManager) prepareMessage(alert alertmgrtmpl.Alert) ([]ChatMess
 	}
 
 	// Convert the template bytes to string.
-	str.WriteString(toText.String())
-	if len(str.String()) > 0 {
+	if len(toText.String()) > 0 {
+		str.WriteString(toText.String())
 		str.WriteString("\n")
+		msg.Text = str.String()
 	}
-	msg.Text = str.String()
 	// Unmarshal the template bytes to the card struct
-	err = json.Unmarshal([]byte(toCard.String()), &card)
-	if err != nil {
-		m.lo.Error("Error unmarshalling card message", "error", err)
-		return messages, err
+	if len(toCard.String()) > 0 {
+		err = json.Unmarshal([]byte(toCard.String()), &card)
+		if err != nil {
+			m.lo.Error("Error unmarshalling card message", "error", err)
+			return messages, err
+		}
+		msg.CardsV2 = []*chatv1.CardWithId{&card}
 	}
-	msg.CardsV2 = []*chatv1.CardWithId{&card}
 
 	// Add the message to batch.
 	messages = append(messages, msg)
