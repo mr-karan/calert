@@ -22,11 +22,11 @@ const (
 // G-Chat Webhook API
 func (m *GoogleChatManager) prepareMessage(alert alertmgrtmpl.Alert) ([]ChatMessage, error) {
 	var (
-		str strings.Builder
+		str		strings.Builder
 		toText  bytes.Buffer
 		toCard  bytes.Buffer
-		msg ChatMessage
-		card chatv1.CardWithId
+		msg     ChatMessage
+		card    chatv1.CardWithId
 	)
 
 	messages := make([]ChatMessage, 0)
