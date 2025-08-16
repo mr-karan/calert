@@ -1,0 +1,21 @@
+{{- define "cardsV2" -}}
+{
+  "card": {
+    "sections": [
+      {
+        "header": "<b>({{.Labels.severity | toUpper }}) {{ .Labels.alertname | Title }} - {{.Status | Title }}</b>",
+        "widgets": [
+          {{- range $i, $pair := .Annotations.SortedPairs -}}
+          {{- if ne $i 0 -}},{{- end -}}
+          {
+            "decoratedText": {
+              "text": "{{ $pair.Name | Title }}: {{ $pair.Value}}"
+            }
+          }
+          {{- end -}}
+        ]
+      }
+    ]
+  }
+}
+{{- end -}}
