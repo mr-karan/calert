@@ -20,16 +20,16 @@ const (
 // prepareMessage accepts an Alert object and templates out with the user provided template.
 // It also splits the alerts if the combined size exceeds the limit of 4096 bytes by
 // G-Chat Webhook API
-func (m *GoogleChatManager) prepareMessage(alert alertmgrtmpl.Alert) ([]ChatMessage, error) {
+func (m *GoogleChatManager) prepareMessage(alert alertmgrtmpl.Alert) ([]chatv1.Message, error) {
 	var (
 		str		strings.Builder
 		toText  bytes.Buffer
 		toCard  bytes.Buffer
-		msg     ChatMessage
+		msg     chatv1.Message
 		card    chatv1.CardWithId
 	)
 
-	messages := make([]ChatMessage, 0)
+	messages := make([]chatv1.Message, 0)
 
 	// Render a template with alert data.
 	err := m.msgTmpl.Execute(&toText, alert)
@@ -75,7 +75,7 @@ func (m *GoogleChatManager) prepareMessage(alert alertmgrtmpl.Alert) ([]ChatMess
 }
 
 // sendMessage pushes out a notification to Google Chat space.
-func (m *GoogleChatManager) sendMessage(msg ChatMessage, threadKey string) error {
+func (m *GoogleChatManager) sendMessage(msg chatv1.Message, threadKey string) error {
 	out, err := json.Marshal(msg)
 	if err != nil {
 		return err
