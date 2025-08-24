@@ -27,7 +27,8 @@ type AlertDetails struct {
 	UUID     uuid.UUID
 }
 
-// https://github.com/googleapis/google-api-go-client/blob/main/chat/v1/chat-gen.go
+// Type alias, see https://go.dev/blog/alias-names
+// Message type, see https://github.com/googleapis/google-api-go-client/blob/main/chat/v1/chat-gen.go
 type ChatMessage = chatv1.Message
 
 // add adds an alert to the active alerts map.
