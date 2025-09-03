@@ -26,13 +26,6 @@ type AlertDetails struct {
 	UUID     uuid.UUID
 }
 
-// ChatMessage represents the structure for sending a
-// Text message in Google Chat Webhook endpoint.
-// https://developers.google.com/chat/api/guides/message-formats/basic
-type ChatMessage struct {
-	Text string `json:"text"`
-}
-
 // add adds an alert to the active alerts map.
 func (d *ActiveAlerts) add(a alertmgrtmpl.Alert) error {
 	d.Lock()

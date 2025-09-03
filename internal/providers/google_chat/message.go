@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
+	chatv1 "google.golang.org/api/chat/v1"
 )
 
 const (
@@ -19,33 +20,53 @@ const (
 // prepareMessage accepts an Alert object and templates out with the user provided template.
 // It also splits the alerts if the combined size exceeds the limit of 4096 bytes by
 // G-Chat Webhook API
-func (m *GoogleChatManager) prepareMessage(alert alertmgrtmpl.Alert) ([]ChatMessage, error) {
+func (m *GoogleChatManager) prepareMessage(alert alertmgrtmpl.Alert) ([]chatv1.Message, error) {
 	var (
-		str strings.Builder
-		to  bytes.Buffer
-		msg ChatMessage
+		str		strings.Builder
+		toText  bytes.Buffer
+		toCard  bytes.Buffer
+		msg     chatv1.Message
+		card    chatv1.CardWithId
 	)
 
-	messages := make([]ChatMessage, 0)
+	messages := make([]chatv1.Message, 0)
 
 	// Render a template with alert data.
-	err := m.msgTmpl.Execute(&to, alert)
+	err := m.msgTmpl.Execute(&toText, alert)
 	if err != nil {
 		m.lo.Error("Error parsing values in template", "error", err)
 		return messages, err
 	}
+	if m.msgTmpl.Lookup("cardsV2") != nil {
+		err = m.msgTmpl.ExecuteTemplate(&toCard, "cardsV2", alert)
+		if err != nil {
+			m.lo.Error("Error parsing values in template", "error", err)
+			return messages, err
+		}
+	}
 
 	// Split the message if it exceeds the limit.
-	if (len(str.String()) + len(to.String())) >= maxMsgSize {
+	if (len(str.String()) + len(toText.String())) >= maxMsgSize {
 		msg.Text = str.String()
 		messages = append(messages, msg)
 		str.Reset()
 	}
 
 	// Convert the template bytes to string.
-	str.WriteString(to.String())
-	str.WriteString("\n")
-	msg.Text = str.String()
+	if len(toText.String()) > 0 {
+		str.WriteString(toText.String())
+		str.WriteString("\n")
+		msg.Text = str.String()
+	}
+	// Unmarshal the template bytes to the card struct
+	if len(toCard.String()) > 0 {
+		err = json.Unmarshal([]byte(toCard.String()), &card)
+		if err != nil {
+			m.lo.Error("Error unmarshalling card message", "error", err)
+			return messages, err
+		}
+		msg.CardsV2 = []*chatv1.CardWithId{&card}
+	}
 
 	// Add the message to batch.
 	messages = append(messages, msg)
@@ -54,7 +75,7 @@ func (m *GoogleChatManager) prepareMessage(alert alertmgrtmpl.Alert) ([]ChatMess
 }
 
 // sendMessage pushes out a notification to Google Chat space.
-func (m *GoogleChatManager) sendMessage(msg ChatMessage, threadKey string) error {
+func (m *GoogleChatManager) sendMessage(msg chatv1.Message, threadKey string) error {
 	out, err := json.Marshal(msg)
 	if err != nil {
 		return err
