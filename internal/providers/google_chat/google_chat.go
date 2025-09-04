@@ -69,6 +69,7 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 	client.RetryWaitMax = opts.RetryWaitMax
 	client.HTTPClient.Timeout = opts.Timeout
 	client.HTTPClient.Transport = transport
+	client.Logger = &slogAdapter{logger: opts.Log}
 
 	// Initialise the map of active alerts.
 	alerts := make(map[string]AlertDetails, 0)
