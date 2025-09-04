@@ -106,6 +106,9 @@ func initProviders(ko *koanf.Koanf, lo *slog.Logger, metrics *metrics.Manager) (
 					ThreadedReplies: ko.Bool(fmt.Sprintf("%s.threaded_replies", cfgKey)),
 					Metrics:         metrics,
 					DryRun:          ko.Bool(fmt.Sprintf("%s.dry_run", cfgKey)),
+					RetryMax:        ko.MustInt(fmt.Sprintf("%s.retry_max", cfgKey)),
+					RetryWaitMin:    ko.MustDuration(fmt.Sprintf("%s.retry_wait_min", cfgKey)),
+					RetryWaitMax:    ko.MustDuration(fmt.Sprintf("%s.retry_wait_max", cfgKey)),
 				},
 			)
 			if err != nil {
