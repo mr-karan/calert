@@ -97,16 +97,9 @@ func (m *GoogleChatManager) sendMessage(msg chatv1.Message, threadKey string) er
 	u.RawQuery = q.Encode()
 	endpoint := u.String()
 
-	// Prepare the request.
-	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(out))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
 	// Send the request.
 	m.lo.Debug("sending alert", "url", endpoint, "msg", msg.Text)
-	resp, err := m.client.Do(req)
+	resp, err := m.client.Post(endpoint, "application/json", bytes.NewBuffer(out))
 	if err != nil {
 		return err
 	}

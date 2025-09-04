@@ -4,6 +4,7 @@ require (
 	github.com/VictoriaMetrics/metrics v1.39.1
 	github.com/go-chi/chi/v5 v5.2.2
 	github.com/gofrs/uuid v4.4.0+incompatible
+	github.com/hashicorp/go-retryablehttp v0.7.8
 	github.com/knadh/koanf v1.5.0
 	github.com/prometheus/alertmanager v0.28.1
 	github.com/spf13/pflag v1.0.7
@@ -27,6 +28,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.15.0 // indirect
+	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
