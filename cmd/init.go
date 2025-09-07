@@ -86,6 +86,7 @@ func initConfig(cfgDefault string, envPrefix string) (*koanf.Koanf, error) {
 func initProviders(ko *koanf.Koanf, lo *slog.Logger, metrics *metrics.Manager) ([]prvs.Provider, error) {
 	provs := make([]prvs.Provider, 0)
 	provDefOpts := map[string]interface{}{
+		"type":             "google_chat",
 		"max_idle_conns":   50,
 		"timeout":          "30s",
 		"template":         "static/message.tmpl",
@@ -100,7 +101,6 @@ func initProviders(ko *koanf.Koanf, lo *slog.Logger, metrics *metrics.Manager) (
 	// Loop over all providers listed in config.
 	for _, name := range ko.MapKeys("providers") {
 		cfgKey := fmt.Sprintf("providers.%s", name)
-		provType := ko.String(fmt.Sprintf("%s.type", cfgKey))
 
 		// Set default values for the provider if not set in config.
 		for valKey, defaultVal := range provDefOpts {
@@ -109,6 +109,7 @@ func initProviders(ko *koanf.Koanf, lo *slog.Logger, metrics *metrics.Manager) (
 			}
 		}
 
+		provType := ko.String(fmt.Sprintf("%s.type", cfgKey))
 		switch provType {
 		case "google_chat":
 			opts := google_chat.GoogleChatOpts{
@@ -127,7 +128,7 @@ func initProviders(ko *koanf.Koanf, lo *slog.Logger, metrics *metrics.Manager) (
 				RetryWaitMin:    ko.Duration(fmt.Sprintf("%s.retry_wait_min", cfgKey)),
 				RetryWaitMax:    ko.Duration(fmt.Sprintf("%s.retry_wait_max", cfgKey)),
 			}
-			lo.Debug("provider options", "options", opts)
+			lo.Debug("provider options", "type", provType, "options", opts)
 
 			gchat, err := google_chat.NewGoogleChat(opts)
 			if err != nil {
