@@ -85,32 +85,51 @@ func initConfig(cfgDefault string, envPrefix string) (*koanf.Koanf, error) {
 // initProviders loads all the providers specified in the config.
 func initProviders(ko *koanf.Koanf, lo *slog.Logger, metrics *metrics.Manager) ([]prvs.Provider, error) {
 	provs := make([]prvs.Provider, 0)
+	provDefOpts := map[string]interface{}{
+		"max_idle_conns":   50,
+		"timeout":          "30s",
+		"template":         "static/message.tmpl",
+		"thread_ttl":       "12h",
+		"threaded_replies": false,
+		"dry_run":          false,
+		"retry_max":        3,
+		"retry_wait_min":   "1s",
+		"retry_wait_max":   "5s",
+	}
 
 	// Loop over all providers listed in config.
 	for _, name := range ko.MapKeys("providers") {
 		cfgKey := fmt.Sprintf("providers.%s", name)
 		provType := ko.String(fmt.Sprintf("%s.type", cfgKey))
 
+		// Set default values for the provider if not set in config.
+		for valKey, defaultVal := range provDefOpts {
+			if !ko.Exists(fmt.Sprintf("%s.%s", cfgKey, valKey)) {
+				ko.Set(fmt.Sprintf("%s.%s", cfgKey, valKey), defaultVal)
+			}
+		}
+
 		switch provType {
 		case "google_chat":
-			gchat, err := google_chat.NewGoogleChat(
-				google_chat.GoogleChatOpts{
-					Log:             lo,
-					Timeout:         ko.MustDuration(fmt.Sprintf("%s.timeout", cfgKey)),
-					MaxIdleConn:     ko.MustInt(fmt.Sprintf("%s.max_idle_conns", cfgKey)),
-					ProxyURL:        ko.String(fmt.Sprintf("%s.proxy_url", cfgKey)),
-					Endpoint:        ko.MustString(fmt.Sprintf("%s.endpoint", cfgKey)),
-					Room:            name,
-					Template:        ko.MustString(fmt.Sprintf("%s.template", cfgKey)),
-					ThreadTTL:       ko.MustDuration(fmt.Sprintf("%s.thread_ttl", cfgKey)),
-					ThreadedReplies: ko.Bool(fmt.Sprintf("%s.threaded_replies", cfgKey)),
-					Metrics:         metrics,
-					DryRun:          ko.Bool(fmt.Sprintf("%s.dry_run", cfgKey)),
-					RetryMax:        ko.MustInt(fmt.Sprintf("%s.retry_max", cfgKey)),
-					RetryWaitMin:    ko.MustDuration(fmt.Sprintf("%s.retry_wait_min", cfgKey)),
-					RetryWaitMax:    ko.MustDuration(fmt.Sprintf("%s.retry_wait_max", cfgKey)),
-				},
-			)
+			opts := google_chat.GoogleChatOpts{
+				Log:             lo,
+				Timeout:         ko.MustDuration(fmt.Sprintf("%s.timeout", cfgKey)),
+				MaxIdleConn:     ko.MustInt(fmt.Sprintf("%s.max_idle_conns", cfgKey)),
+				ProxyURL:        ko.String(fmt.Sprintf("%s.proxy_url", cfgKey)),
+				Endpoint:        ko.MustString(fmt.Sprintf("%s.endpoint", cfgKey)),
+				Room:            name,
+				Template:        ko.MustString(fmt.Sprintf("%s.template", cfgKey)),
+				ThreadTTL:       ko.MustDuration(fmt.Sprintf("%s.thread_ttl", cfgKey)),
+				ThreadedReplies: ko.Bool(fmt.Sprintf("%s.threaded_replies", cfgKey)),
+				Metrics:         metrics,
+				DryRun:          ko.Bool(fmt.Sprintf("%s.dry_run", cfgKey)),
+				RetryMax:        ko.MustInt(fmt.Sprintf("%s.retry_max", cfgKey)),
+				RetryWaitMin:    ko.MustDuration(fmt.Sprintf("%s.retry_wait_min", cfgKey)),
+				RetryWaitMax:    ko.MustDuration(fmt.Sprintf("%s.retry_wait_max", cfgKey)),
+			}
+			lo.Debug("provider options", "options", opts)
+
+			gchat, err := google_chat.NewGoogleChat(opts)
 			if err != nil {
 				return nil, fmt.Errorf("error initialising google chat provider: %s", err)
 			}
