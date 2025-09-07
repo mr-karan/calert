@@ -62,7 +62,7 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 		transport.Proxy = http.ProxyURL(u)
 	}
 
-	// Initialise a generic HTTP Client for communicating with the G-Chat APIs.
+	// Initialise a retryable HTTP Client for communicating with the G-Chat APIs.
 	client := retryablehttp.NewClient()
 	client.RetryMax = opts.RetryMax
 	client.RetryWaitMin = opts.RetryWaitMin
