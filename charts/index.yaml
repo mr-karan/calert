@@ -3,10 +3,10 @@ entries:
   calert:
   - apiVersion: v2
     appVersion: v2.2.0
-    created: "2025-09-09T11:21:13.504440517Z"
+    created: "2025-09-09T11:25:08.483199217Z"
     description: A Helm chart for the calert which uses Alertmanager webhook receiver
       to receive alerts payload, and pushes this data to Google Chat webhook endpoint.
-    digest: 769d5186f8dda8e4216c3dcf453b57ce11e711922a877cc63fcc75b27a01db53
+    digest: ed5d5b23eb265142529097c08fdbbf20321b62efddfda8c38b9302a1c0b6401a
     home: https://github.com/mr-karan/calert
     keywords:
     - monitoring
@@ -126,4 +126,4 @@ entries:
     urls:
     - https://mr-karan.github.io/calert/charts/calert-v0.2.2.tgz
     version: v0.2.2
-generated: "2025-09-09T11:21:13.503788573Z"
+generated: "2025-09-09T11:25:08.482569112Z"
