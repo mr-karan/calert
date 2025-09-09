@@ -75,16 +75,22 @@ Example:
 
 #### Providers
 
-`calert` can load a map of different _providers_. The unique identifier for the `provider` is the room name. Each provider has it's own configuration, based on it's `provider_type. Currently `calert` supports Google Chat but can support arbitary providers as well.
+`calert` can load a map of different _providers_. The unique identifier for the `provider` is the room name. Each provider has it's own configuration, based on it's `provider_type`. Currently `calert` supports Google Chat but can support arbitary providers as well.
 
-|  Key  	|  Explanation 	| Default 	|
-|---	| ---	| --- |
-|  `providers.<room_name>.type` 	| Provider type. Currently only `google_chat` is supported. 	| `google_chat`	|
-|  `providers.<room_name>.endpoint` 	| Webhook URL to send alerts to.  	| - |
-|  `providers.<room_name>.max_idle_conns` 	| Maximum Keep Alive connections to keep in the pool.  	| `50` |
-|  `providers.<room_name>.timeout` 	| Timeout for making HTTP requests to the webhook URL.  	| `7s` |
-|  `providers.<room_name>.template` 	| Template for rendering a formatted Alert notification.  	| `static/message.tmpl` |
-|  `providers.<room_name>.thread_ttl` 	| Timeout to keep active alerts in memory. Once this TTL expires, a new thread will be created.	| `12h` |
+|  Key  	|  Explanation 	| Required 	| Default 	|
+|---	| ---	| ---	| --- |
+|  `providers.<room_name>.type` 	| Provider type. Currently only `google_chat` is supported. 	| no | `google_chat`	|
+|  `providers.<room_name>.endpoint` 	| Webhook URL to send alerts to.  	| yes | - |
+|  `providers.<room_name>.max_idle_conns` 	| Maximum Keep Alive connections to keep in the pool.  	| yes | `50` |
+|  `providers.<room_name>.timeout` 	| Timeout for making HTTP requests to the webhook URL.  	| yes | `30s` |
+|  `providers.<room_name>.template` 	| Template for rendering a formatted Alert notification.  	| yes | `static/message.tmpl` |
+|  `providers.<room_name>.thread_ttl` 	| Timeout to keep active alerts in memory. Once this TTL expires, a new thread will be created.	| yes | `12h` |
+|  `providers.<room_name>.proxy_url` 	| Specify `proxy_url` as your proxy endpoint to route all HTTP requests to the provider via a proxy. | no | - |
+|  `providers.<room_name>.threaded_replies` 	| Whether to send threaded replies or not. | no | false |
+|  `providers.<room_name>.dry_run` 	| In case you're simply experimenting with `calert` config changes and you don't wish to send _actual_ notifications, you can set true. | no | false |
+|  `providers.<room_name>.retry_max` 	| Maximum number of retries | no | `3` |
+|  `providers.<room_name>.retry_wait_min` 	| Minimum time to wait before retrying | no | `1s` |
+|  `providers.<room_name>.retry_wait_max` 	| Maximum time to wait before retrying | no | `5s` |
 
 ## Alertmanager Integration
 

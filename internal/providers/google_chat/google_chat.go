@@ -11,6 +11,7 @@ import (
 	"text/template"
 	"time"
 
+	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	"github.com/mr-karan/calert/internal/metrics"
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
 	"golang.org/x/text/cases"
@@ -23,7 +24,7 @@ type GoogleChatManager struct {
 	activeAlerts    *ActiveAlerts
 	endpoint        string
 	room            string
-	client          *http.Client
+	client          *retryablehttp.Client
 	msgTmpl         *template.Template
 	dryRun          bool
 	threadedReplies bool
@@ -41,6 +42,9 @@ type GoogleChatOpts struct {
 	Template        string
 	ThreadTTL       time.Duration
 	ThreadedReplies bool
+	RetryMax        int
+	RetryWaitMin    time.Duration
+	RetryWaitMax    time.Duration
 }
 
 // NewGoogleChat initializes a Google Chat provider object.
@@ -58,11 +62,14 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 		transport.Proxy = http.ProxyURL(u)
 	}
 
-	// Initialise a generic HTTP Client for communicating with the G-Chat APIs.
-	client := &http.Client{
-		Timeout:   opts.Timeout,
-		Transport: transport,
-	}
+	// Initialise a retryable HTTP Client for communicating with the G-Chat APIs.
+	client := retryablehttp.NewClient()
+	client.RetryMax = opts.RetryMax
+	client.RetryWaitMin = opts.RetryWaitMin
+	client.RetryWaitMax = opts.RetryWaitMax
+	client.HTTPClient.Timeout = opts.Timeout
+	client.HTTPClient.Transport = transport
+	client.Logger = &slogAdapter{logger: opts.Log}
 
 	// Initialise the map of active alerts.
 	alerts := make(map[string]AlertDetails, 0)

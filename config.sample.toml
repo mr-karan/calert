@@ -7,21 +7,27 @@ log = "info" # Use `debug` to enable verbose logging. Can be set to `info` other
 [providers.prod_alerts]
 type = "google_chat" # Type of provider. Currently supported value is `google_chat`.
 endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=key&token=token%3D" # Google Chat Webhook URL
-max_idle_conns =  50 # Max idle connections in the HTTP Client.
+max_idle_conns = 50 # Max idle connections in the HTTP Client.
 timeout = "30s" # Timeout for making requests to Provider.
 # proxy_url = "http://internal-squid-proxy.com:3128" # Specify `proxy_url` as your proxy endpoint to route all HTTP requests to the provider via a proxy.
 template = "static/message.tmpl" # Path to specify the message template path.
 thread_ttl = "12h" # Timeout to keep active alerts in memory. Once this TTL expires, a new thread will be created.
 threaded_replies = true # Whether to send threaded replies or not.
-dry_run = false
+dry_run = false # In case you're simply experimenting with `calert` config changes and you don't wish to send _actual_ notifications, you can set `true`.
+retry_max = 3 # Maximum number of retries
+retry_wait_min = "1s" # Minimum time to wait before retrying
+retry_wait_max = "5s" # Maximum time to wait before retrying
 
 [providers.dev_alerts]
 type = "google_chat"
 endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=key&token=token%3D"
-max_idle_conns =  50
+max_idle_conns = 50
 timeout = "30s"
 # proxy_url = "http://internal-squid-proxy.com:3128"
 template = "static/message.tmpl"
 thread_ttl = "12h"
-threaded_replies = false # Whether to send threaded replies or not.
+threaded_replies = false
 dry_run = false
+retry_max = 1
+retry_wait_min = "3s"
+retry_wait_max = "10s"
