@@ -68,9 +68,9 @@ spec:
                 value: kube-health
               path: "/ping"
               port: {{ .Values.service.port }}
-            initialDelaySeconds: 10
-            periodSeconds: 60
-            timeoutSeconds: 3
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
           readinessProbe:
             httpGet:
               httpHeaders:
@@ -78,9 +78,9 @@ spec:
                 value: kube-health
               path: "/ping"
               port: {{ .Values.service.port }}
-            initialDelaySeconds: 10
-            periodSeconds: 60
-            timeoutSeconds: 3
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
