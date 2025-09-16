@@ -80,3 +80,10 @@ Change the values according to the need of the environment in ``contrib/helm/cal
 | affinity | object | `{}` |  |
 | topologySpreadConstraints | list | `[]` |  |
 | podAnnotations | object | `{}` |  |
+| livenessProbe.initialDelaySeconds | int | `10` |  |
+| livenessProbe.periodSeconds | int | `60` |  |
+| livenessProbe.timeoutSeconds | int | `3` |  |
+| readinessProbe.initialDelaySeconds | int | `10` |  |
+| readinessProbe.periodSeconds | int | `60` |  |
+| readinessProbe.timeoutSeconds | int | `3` |  |
+
