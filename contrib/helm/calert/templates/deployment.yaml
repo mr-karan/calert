@@ -68,7 +68,6 @@ spec:
                 value: kube-health
               path: "/ping"
               port: {{ .Values.service.port }}
-            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
           readinessProbe:
@@ -78,9 +77,18 @@ spec:
                 value: kube-health
               path: "/ping"
               port: {{ .Values.service.port }}
-            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
             timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+          startupProbe:
+            httpGet:
+              httpHeaders:
+              - name: X-Causation-ID
+                value: kube-health
+              path: "/ping"
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
