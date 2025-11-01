@@ -122,6 +122,10 @@ func (m *GoogleChatManager) Push(alerts []alertmgrtmpl.Alert) error {
 
 	// For each alert, lookup the UUID and send the alert.
 	for _, a := range alerts {
+		now := time.Now()
+
+		m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
+
 		// If it's a new alert whose fingerprint isn't in the active alerts map, add it first.
 		if m.activeAlerts.loookup(a.Fingerprint) == "" {
 			m.activeAlerts.add(a)
@@ -131,31 +135,26 @@ func (m *GoogleChatManager) Push(alerts []alertmgrtmpl.Alert) error {
 		msgs, err := m.prepareMessage(a)
 		if err != nil {
 			m.lo.Error("error preparing message", "error", err)
+			m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_errors_total{provider="%s", room="%s", reason="preparing"}`, m.ID(), m.Room()))
 			continue
 		}
 
 		// Dispatch an HTTP request for each message.
 		for _, msg := range msgs {
-			var (
-				threadKey = m.activeAlerts.alerts[a.Fingerprint].UUID.String()
-				now       = time.Now()
-			)
-
-			m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
+			var threadKey = m.activeAlerts.alerts[a.Fingerprint].UUID.String()
 
 			// Send message to API.
 			if m.dryRun {
 				m.lo.Info("dry_run is enabled for this room. skipping pushing notification", "room", m.Room())
 			} else {
 				if err := m.sendMessage(msg, threadKey); err != nil {
-					m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_errors_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
+					m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_errors_total{provider="%s", room="%s", reason="sending"}`, m.ID(), m.Room()))
 					m.lo.Error("error sending message", "error", err)
 					continue
 				}
 			}
-
-			m.metrics.Duration(fmt.Sprintf(`alerts_dispatched_duration_seconds{provider="%s", room="%s"}`, m.ID(), m.Room()), now)
 		}
+		m.metrics.Duration(fmt.Sprintf(`alerts_dispatched_duration_seconds{provider="%s", room="%s"}`, m.ID(), m.Room()), now)
 	}
 
 	return nil
