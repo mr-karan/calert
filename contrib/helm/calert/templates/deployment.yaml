@@ -29,8 +29,8 @@ spec:
     {{- with .Values.priorityClassName }}
       priorityClassName: {{ . }}
     {{- end }}
-    {{- if .Values.securityContext.enabled }}
-      {{- with omit .Values.securityContext "enabled" }}
+    {{- if .Values.podSecurityContext.enabled }}
+      {{- with omit .Values.podSecurityContext "enabled" }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -44,7 +44,7 @@ spec:
             - {{ . | quote }}
             {{- end }}
         {{- if .Values.securityContext.enabled }}
-          {{- with omit .Values.securityContext "enabled" "runAsGroup" "runAsUser" "runAsNonRoot" "windowsOptions" }}
+          {{- with omit .Values.securityContext "enabled" }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
