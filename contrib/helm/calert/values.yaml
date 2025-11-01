@@ -46,7 +46,7 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/mr-karan/calert
-  tag: v2.0.2
+  tag: "{{ .Chart.AppVersion }}"
   pullPolicy: Always
 
 args:
