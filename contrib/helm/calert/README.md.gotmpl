@@ -1,0 +1,53 @@
+{{ template "chart.header" . }}
+
+{{ template "chart.versionBadge" . }}{{ template "chart.typeBadge" . }}{{ template "chart.appVersionBadge" . }}
+
+{{ template "chart.description" . }}
+
+{{ template "chart.sourcesSection" . }}
+
+## Installation
+
+### Add Helm repository
+
+```bash
+helm repo add calert https://mr-karan.github.io/calert/charts
+helm repo update
+```
+
+### Install the chart
+
+```bash
+helm install calert calert/calert
+```
+
+### Install with custom values
+
+```bash
+helm install calert calert/calert -f values.yaml
+```
+
+## Alertmanager Integration
+
+The Alertmanager helm chart can be found [here](https://github.com/prometheus-community/helm-charts/tree/main/charts/alertmanager). You can refer to the following config block to route webhook alerts to `calert`:
+
+```yaml
+config:
+  receivers:
+    - name: 'calert'
+      webhook_configs:
+      - url: 'http://calert:6000/dispatch'
+
+  route:
+    receiver: 'calert'
+    group_wait: 30s
+    group_interval: 60s
+    repeat_interval: 3h
+    group_by: ['alertname']
+```
+
+{{ template "chart.requirementsSection" . }}
+
+{{ template "chart.valuesSection" . }}
+
+{{ template "chart.maintainersSection" . }}
