@@ -61,6 +61,24 @@ service:
 
 ingress:
   enabled: false
+  # -- Ingress class name (e.g., nginx, traefik, alb)
+  ingressClassName: ""
+  # -- Annotations for the Ingress resource
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  # -- Hosts configuration
+  hosts:
+    - host: calert.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  # -- TLS configuration
+  tls: []
+    # - secretName: calert-tls
+    #   hosts:
+    #     - calert.example.com
 
 resources:
   limits:
