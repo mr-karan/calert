@@ -158,7 +158,6 @@ securityContext:
   # -- Linux capabilities
   capabilities:
     drop: ["ALL"]
-    add: ["NET_BIND_SERVICE"]
 
 # -- Pod security context configuration
 # @default -- See below
@@ -194,6 +193,8 @@ readinessProbe:
 
 # -- Startup probe configuration
 startupProbe:
+  # -- Initial delay before probing (seconds)
+  initialDelaySeconds: 0
   # -- How often to perform the probe (seconds)
   periodSeconds: 10
   # -- Probe timeout (seconds)
