@@ -24,12 +24,15 @@ data:
     {{- range $key, $value := .Values.providers }}
     [providers.{{ $key }}]
     type = {{ $value.type | default "google_chat" | quote }}
-    endpoint = {{ required "setting a endpoint for providers is requiered" $value.endpoint | quote }}
-    max_idle_conns = {{ $value.max_idle_conns | default "50" }}
+    endpoint = {{ required "setting a endpoint for providers is required" $value.endpoint | quote }}
+    max_idle_conns = {{ $value.max_idle_conns | default 50 }}
     timeout = {{ $value.timeout | default "30s" | quote }}
     proxy_url = {{ $value.proxy_url | default "" | quote }}
     template = {{ $value.template | default "static/message.tmpl" | quote }}
     thread_ttl = {{ $value.thread_ttl | default "12h" | quote }}
-    threaded_replies = {{ $value.threaded_replies | default "true" | quote }}
-    dry_run = {{ $value.dry_run | default "false" | quote }}
+    threaded_replies = {{ $value.threaded_replies | default false }}
+    dry_run = {{ $value.dry_run | default false }}
+    retry_max = {{ $value.retry_max | default 3 }}
+    retry_wait_min = {{ $value.retry_wait_min | default "1s" | quote }}
+    retry_wait_max = {{ $value.retry_wait_max | default "5s" | quote }}
     {{- end }}
