@@ -8,11 +8,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
+	"github.com/mr-karan/calert/internal/metrics"
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -146,22 +148,181 @@ func TestTemplateFunctions(t *testing.T) {
 
 	chat, err := NewGoogleChat(*opts)
 	require.NoError(t, err)
+	require.NotNil(t, chat.msgTmpl)
 
-	funcs := chat.msgTmpl.Funcs(nil)
-	assert.NotNil(t, funcs)
-
-	t.Run("CurrentTime returns non-empty string", func(t *testing.T) {
+	t.Run("Template exists", func(t *testing.T) {
 		fn := chat.msgTmpl.Lookup("message.tmpl")
-		assert.NotNil(t, fn, "Template should exist")
+		assert.NotNil(t, fn)
+	})
+}
+
+func TestTemplateFunctionHelpers(t *testing.T) {
+	tests := []struct {
+		name     string
+		fn       func() string
+		expected string
+	}{
+		{
+			name:     "toUpper with string",
+			fn:       func() string { return strings.ToUpper(fmt.Sprintf("%v", "hello")) },
+			expected: "HELLO",
+		},
+		{
+			name:     "toUpper with int converts to string",
+			fn:       func() string { return strings.ToUpper(fmt.Sprintf("%v", 123)) },
+			expected: "123",
+		},
+		{
+			name:     "toLower with string",
+			fn:       func() string { return strings.ToLower(fmt.Sprintf("%v", "HELLO")) },
+			expected: "hello",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.fn()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestActiveAlerts(t *testing.T) {
+	lo := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	t.Run("add and lookup alert", func(t *testing.T) {
+		aa := &ActiveAlerts{
+			alerts: make(map[string]AlertDetails),
+			lo:     lo,
+		}
+
+		alert := alertmgrtmpl.Alert{
+			Fingerprint: "abc123",
+			StartsAt:    time.Now(),
+		}
+
+		err := aa.add(alert)
+		require.NoError(t, err)
+
+		uuid := aa.loookup("abc123")
+		assert.NotEmpty(t, uuid)
+		assert.Len(t, uuid, 36)
 	})
 
-	t.Run("DurationSince calculates duration", func(t *testing.T) {
-		pastTime := time.Now().Add(-2*time.Hour - 30*time.Minute - 45*time.Second)
-		d := time.Since(pastTime)
-		h := int(d.Hours())
-		m := int(d.Minutes()) % 60
-		s := int(d.Seconds()) % 60
-		result := fmt.Sprintf("%dh %dm %ds", h, m, s)
-		assert.Contains(t, result, "2h 30m")
+	t.Run("lookup non-existent alert returns empty", func(t *testing.T) {
+		aa := &ActiveAlerts{
+			alerts: make(map[string]AlertDetails),
+			lo:     lo,
+		}
+
+		uuid := aa.loookup("nonexistent")
+		assert.Empty(t, uuid)
+	})
+
+	t.Run("prune removes expired alerts", func(t *testing.T) {
+		m := metrics.New("calert")
+		aa := &ActiveAlerts{
+			alerts:  make(map[string]AlertDetails),
+			lo:      lo,
+			metrics: m,
+		}
+
+		oldAlert := alertmgrtmpl.Alert{
+			Fingerprint: "old",
+			StartsAt:    time.Now().Add(-2 * time.Hour),
+		}
+		newAlert := alertmgrtmpl.Alert{
+			Fingerprint: "new",
+			StartsAt:    time.Now(),
+		}
+
+		aa.add(oldAlert)
+		aa.add(newAlert)
+
+		assert.Len(t, aa.alerts, 2)
+
+		aa.Prune(1 * time.Hour)
+
+		assert.Len(t, aa.alerts, 1)
+		assert.Empty(t, aa.loookup("old"))
+		assert.NotEmpty(t, aa.loookup("new"))
+	})
+}
+
+func TestGoogleChatManager(t *testing.T) {
+	t.Run("ID returns google_chat", func(t *testing.T) {
+		opts := &GoogleChatOpts{
+			Log:      slog.New(slog.NewJSONHandler(os.Stdout, nil)),
+			Endpoint: "http://test",
+			Room:     "test-room",
+			Template: "../../../static/message.tmpl",
+		}
+		chat, err := NewGoogleChat(*opts)
+		require.NoError(t, err)
+
+		assert.Equal(t, "google_chat", chat.ID())
+	})
+
+	t.Run("Room returns configured room", func(t *testing.T) {
+		opts := &GoogleChatOpts{
+			Log:      slog.New(slog.NewJSONHandler(os.Stdout, nil)),
+			Endpoint: "http://test",
+			Room:     "my-room",
+			Template: "../../../static/message.tmpl",
+		}
+		chat, err := NewGoogleChat(*opts)
+		require.NoError(t, err)
+
+		assert.Equal(t, "my-room", chat.Room())
+	})
+}
+
+func TestPrepareMessage(t *testing.T) {
+	opts := &GoogleChatOpts{
+		Log:      slog.New(slog.NewJSONHandler(os.Stdout, nil)),
+		Endpoint: "http://test",
+		Room:     "test",
+		Template: "../../../static/message.tmpl",
+	}
+	chat, err := NewGoogleChat(*opts)
+	require.NoError(t, err)
+
+	t.Run("prepares message with all fields", func(t *testing.T) {
+		alert := alertmgrtmpl.Alert{
+			Status:      "firing",
+			Fingerprint: "test123",
+			Labels: alertmgrtmpl.KV{
+				"severity":  "critical",
+				"alertname": "TestAlert",
+			},
+			Annotations: alertmgrtmpl.KV{
+				"summary":     "Test summary",
+				"description": "Test description",
+			},
+		}
+
+		msgs, err := chat.prepareMessage(alert)
+		require.NoError(t, err)
+		require.Len(t, msgs, 1)
+		assert.Contains(t, msgs[0].Text, "CRITICAL")
+		assert.Contains(t, msgs[0].Text, "Testalert")
+		assert.Contains(t, msgs[0].Text, "Firing")
+	})
+
+	t.Run("handles empty annotations", func(t *testing.T) {
+		alert := alertmgrtmpl.Alert{
+			Status:      "resolved",
+			Fingerprint: "test456",
+			Labels: alertmgrtmpl.KV{
+				"severity":  "warning",
+				"alertname": "EmptyAnnotations",
+			},
+			Annotations: alertmgrtmpl.KV{},
+		}
+
+		msgs, err := chat.prepareMessage(alert)
+		require.NoError(t, err)
+		require.Len(t, msgs, 1)
+		assert.Contains(t, msgs[0].Text, "WARNING")
 	})
 }

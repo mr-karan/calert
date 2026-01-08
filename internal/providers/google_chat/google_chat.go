@@ -94,12 +94,38 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 
 	// Initialise message template functions.
 	templateFuncMap := template.FuncMap{
-		"Title": func(s string) string {
+		"Title": func(v any) string {
+			s := fmt.Sprintf("%v", v)
 			titleCaser := cases.Title(language.English)
 			return titleCaser.String(s)
 		},
-		"toUpper":  strings.ToUpper,
-		"Contains": strings.Contains,
+		"toUpper": func(v any) string {
+			return strings.ToUpper(fmt.Sprintf("%v", v))
+		},
+		"toLower": func(v any) string {
+			return strings.ToLower(fmt.Sprintf("%v", v))
+		},
+		"Contains": func(s, substr any) bool {
+			return strings.Contains(fmt.Sprintf("%v", s), fmt.Sprintf("%v", substr))
+		},
+		"HasPrefix": func(s, prefix any) bool {
+			return strings.HasPrefix(fmt.Sprintf("%v", s), fmt.Sprintf("%v", prefix))
+		},
+		"HasSuffix": func(s, suffix any) bool {
+			return strings.HasSuffix(fmt.Sprintf("%v", s), fmt.Sprintf("%v", suffix))
+		},
+		"Replace": func(s, old, new any) string {
+			return strings.ReplaceAll(fmt.Sprintf("%v", s), fmt.Sprintf("%v", old), fmt.Sprintf("%v", new))
+		},
+		"TrimSpace": func(v any) string {
+			return strings.TrimSpace(fmt.Sprintf("%v", v))
+		},
+		"Default": func(defaultVal, val any) any {
+			if val == nil || fmt.Sprintf("%v", val) == "" {
+				return defaultVal
+			}
+			return val
+		},
 		"reReplaceAll": func(pattern, repl, text string) string {
 			re := regexp.MustCompile(pattern)
 			return re.ReplaceAllString(text, repl)
