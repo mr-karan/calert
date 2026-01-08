@@ -1,6 +1,7 @@
 package google_chat
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -70,6 +71,23 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 	client.HTTPClient.Timeout = opts.Timeout
 	client.HTTPClient.Transport = transport
 	client.Logger = &slogAdapter{logger: opts.Log}
+
+	// Custom CheckRetry policy that also retries on 429 (Too Many Requests).
+	// This is important for Google Chat API which rate limits requests.
+	client.CheckRetry = func(ctx context.Context, resp *http.Response, err error) (bool, error) {
+		// First, check the default retry policy.
+		shouldRetry, checkErr := retryablehttp.DefaultRetryPolicy(ctx, resp, err)
+		if shouldRetry {
+			return true, checkErr
+		}
+
+		// Additionally retry on 429 Too Many Requests.
+		if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
+			return true, nil
+		}
+
+		return false, nil
+	}
 
 	// Initialise the map of active alerts.
 	alerts := make(map[string]AlertDetails, 0)
