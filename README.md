@@ -92,6 +92,63 @@ Example:
 |  `providers.<room_name>.retry_wait_min` 	| Minimum time to wait before retrying | no | `1s` |
 |  `providers.<room_name>.retry_wait_max` 	| Maximum time to wait before retrying | no | `5s` |
 
+## Message Templates
+
+`calert` supports Go templates for formatting alert messages. Templates have access to all alert fields and several helper functions.
+
+### Available Template Functions
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `Title` | Title case string | `{{ .Labels.alertname \| Title }}` |
+| `toUpper` | Uppercase string | `{{ .Labels.severity \| toUpper }}` |
+| `toLower` | Lowercase string | `{{ .Status \| toLower }}` |
+| `Contains` | Check if string contains substring | `{{ if Contains .Labels.alertname "CPU" }}...{{ end }}` |
+| `HasPrefix` | Check string prefix | `{{ if HasPrefix .Labels.instance "prod" }}...{{ end }}` |
+| `HasSuffix` | Check string suffix | `{{ if HasSuffix .Labels.job "exporter" }}...{{ end }}` |
+| `Replace` | Replace all occurrences | `{{ Replace .Labels.instance ":" "_" }}` |
+| `TrimSpace` | Trim whitespace | `{{ .Annotations.description \| TrimSpace }}` |
+| `Default` | Provide default value | `{{ .Annotations.runbook \| Default "No runbook" }}` |
+| `reReplaceAll` | Regex replace | `{{ reReplaceAll "\\d+" "X" .Labels.instance }}` |
+| `CurrentTime` | Current time (optional timezone) | `{{ CurrentTime "Asia/Kolkata" }}` |
+| `ConvertTZ` | Convert time to timezone | `{{ ConvertTZ .StartsAt "America/New_York" }}` |
+| `DurationSince` | Duration since time | `{{ DurationSince .StartsAt }}` |
+
+### CardsV2 Support
+
+For rich formatting with colors and structured layouts, use Google Chat's [CardsV2](https://developers.google.com/chat/api/reference/rest/v1/cards) format by defining a `cardsV2` template block:
+
+```
+{{- define "cardsV2" -}}
+{
+  "cardId": "alert-{{ .Fingerprint }}",
+  "card": {
+    "header": {
+      "title": "{{ .Labels.alertname }}",
+      "subtitle": "{{ .Status | Title }}"
+    },
+    "sections": [{
+      "widgets": [{
+        "decoratedText": {
+          "text": "{{ .Annotations.description }}"
+        }
+      }]
+    }]
+  }
+}
+{{- end -}}
+```
+
+### Google Chat Formatting Limitations
+
+Google Chat's simple text webhook supports limited formatting:
+- **Bold**: `*text*`
+- **Italic**: `_text_`
+- **Strikethrough**: `~text~`
+- **Monospace**: `` `text` ``
+
+**Note**: HTML tags (like `<font color="...">`) and standard emoji shortcodes (`:warning:`) are **not supported** in simple text messages. For colors and rich formatting, use CardsV2 templates instead.
+
 ## Alertmanager Integration
 
 -   Alertmanager has the ability of group similar alerts together and fire only one event, clubbing all the alerts data into one event. `calert` leverages this and sends all alerts in one message by looping over the alerts and passing data in the template. You can configure the rules for grouping the alerts in `alertmanager.yml` config. You can read more about it [here](https://github.com/prometheus/docs/blob/master/content/docs/alerting/alertmanager.md#grouping).
@@ -112,6 +169,31 @@ receivers:
     - name: 'calert'
       webhook_configs:
       - url: 'http://calert:6000/dispatch'
+```
+
+### Understanding repeat_interval
+
+Alertmanager's `repeat_interval` controls how often alerts are re-sent while still firing. When using `calert` with `threaded_replies=true`, repeated alerts will be posted to the same thread (within the `thread_ttl` window). This is **expected behavior** - it ensures your team sees that an alert is still active.
+
+If you want fewer repeated messages:
+- Increase `repeat_interval` in Alertmanager config
+- Increase `thread_ttl` in calert config to keep alerts in the same thread longer
+
+### Kubernetes AlertmanagerConfig
+
+When using Kubernetes `AlertmanagerConfig` CRD, the receiver name is automatically prefixed with `namespace/config-name/receiver`. Use the `room_name` query parameter to override:
+
+```yaml
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: my-config
+  namespace: monitoring
+spec:
+  receivers:
+    - name: prod_alerts
+      webhookConfigs:
+        - url: http://calert:6000/dispatch?room_name=prod_alerts
 ```
 
 ## Threading Support in Google Chat
