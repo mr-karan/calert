@@ -95,7 +95,6 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 	// Initialise message template functions.
 	templateFuncMap := template.FuncMap{
 		"Title": func(s string) string {
-			// Create a Title cased string respecting Unicode rules.
 			titleCaser := cases.Title(language.English)
 			return titleCaser.String(s)
 		},
@@ -104,6 +103,30 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 		"reReplaceAll": func(pattern, repl, text string) string {
 			re := regexp.MustCompile(pattern)
 			return re.ReplaceAllString(text, repl)
+		},
+		"CurrentTime": func(location ...string) string {
+			if len(location) == 0 || location[0] == "" {
+				return time.Now().Format("2006-01-02 15:04:05 MST")
+			}
+			loc, err := time.LoadLocation(location[0])
+			if err != nil {
+				return fmt.Sprintf("Error loading timezone: %v", err)
+			}
+			return time.Now().In(loc).Format("2006-01-02 15:04:05 MST")
+		},
+		"ConvertTZ": func(t time.Time, location string) string {
+			loc, err := time.LoadLocation(location)
+			if err != nil {
+				return fmt.Sprintf("Error loading timezone: %v", err)
+			}
+			return t.In(loc).Format("2006-01-02 15:04:05 MST")
+		},
+		"DurationSince": func(t time.Time) string {
+			d := time.Since(t)
+			h := int(d.Hours())
+			m := int(d.Minutes()) % 60
+			s := int(d.Seconds()) % 60
+			return fmt.Sprintf("%dh %dm %ds", h, m, s)
 		},
 	}
 

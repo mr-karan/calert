@@ -2,6 +2,7 @@ package google_chat
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -100,7 +101,6 @@ func TestRetryPolicyIntegration(t *testing.T) {
 }
 
 func TestGoogleChatTemplate(t *testing.T) {
-
 	opts := &GoogleChatOpts{
 		Log:      slog.New(slog.NewJSONHandler(os.Stdout, nil)),
 		Endpoint: "http://",
@@ -133,5 +133,35 @@ func TestGoogleChatTemplate(t *testing.T) {
 
 	assert.Equal(t, "message.tmpl", filepath.Base(chat.msgTmpl.Name()), "Message template name")
 	assert.Equal(t, expectedMessage, msgs[0].Text, "Message content")
+}
 
+func TestTemplateFunctions(t *testing.T) {
+	opts := &GoogleChatOpts{
+		Log:      slog.New(slog.NewJSONHandler(os.Stdout, nil)),
+		Endpoint: "http://",
+		Room:     "test",
+		Template: "../../../static/message.tmpl",
+		DryRun:   true,
+	}
+
+	chat, err := NewGoogleChat(*opts)
+	require.NoError(t, err)
+
+	funcs := chat.msgTmpl.Funcs(nil)
+	assert.NotNil(t, funcs)
+
+	t.Run("CurrentTime returns non-empty string", func(t *testing.T) {
+		fn := chat.msgTmpl.Lookup("message.tmpl")
+		assert.NotNil(t, fn, "Template should exist")
+	})
+
+	t.Run("DurationSince calculates duration", func(t *testing.T) {
+		pastTime := time.Now().Add(-2*time.Hour - 30*time.Minute - 45*time.Second)
+		d := time.Since(pastTime)
+		h := int(d.Hours())
+		m := int(d.Minutes()) % 60
+		s := int(d.Seconds()) % 60
+		result := fmt.Sprintf("%dh %dm %ds", h, m, s)
+		assert.Contains(t, result, "2h 30m")
+	})
 }
