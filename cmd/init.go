@@ -60,7 +60,7 @@ func initConfig(cfgDefault string, envPrefix string) (*koanf.Koanf, error) {
 	if err != nil {
 		// If the default config is not present, print a warning and continue reading the values from env.
 		if *cfgPath == cfgDefault {
-			log.Printf("unable to open config file: %w falling back to env vars\n", err.Error())
+			log.Printf("unable to open config file: %s falling back to env vars\n", err.Error())
 		} else {
 			return nil, err
 		}
