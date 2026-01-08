@@ -22,11 +22,11 @@ const (
 // G-Chat Webhook API
 func (m *GoogleChatManager) prepareMessage(alert alertmgrtmpl.Alert) ([]chatv1.Message, error) {
 	var (
-		str		strings.Builder
-		toText  bytes.Buffer
-		toCard  bytes.Buffer
-		msg     chatv1.Message
-		card    chatv1.CardWithId
+		str    strings.Builder
+		toText bytes.Buffer
+		toCard bytes.Buffer
+		msg    chatv1.Message
+		card   chatv1.CardWithId
 	)
 
 	messages := make([]chatv1.Message, 0)
@@ -98,7 +98,8 @@ func (m *GoogleChatManager) sendMessage(msg chatv1.Message, threadKey string) er
 	endpoint := u.String()
 
 	// Send the request.
-	m.lo.Debug("sending alert", "url", endpoint, "msg", msg.Text)
+	hasCard := len(msg.CardsV2) > 0
+	m.lo.Debug("sending alert", "url", endpoint, "msg", msg.Text, "hasCardsV2", hasCard, "payload", string(out))
 	resp, err := m.client.Post(endpoint, "application/json", bytes.NewBuffer(out))
 	if err != nil {
 		return err
