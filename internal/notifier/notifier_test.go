@@ -99,7 +99,7 @@ func TestDispatch(t *testing.T) {
 		assert.Equal(t, "alert2", prov.pushed[1].Fingerprint)
 	})
 
-	t.Run("returns error for unknown room", func(t *testing.T) {
+	t.Run("returns error for unknown room with available rooms", func(t *testing.T) {
 		prov := &mockProvider{id: "google_chat", room: "test-room"}
 
 		notif, err := Init(Opts{
@@ -111,6 +111,22 @@ func TestDispatch(t *testing.T) {
 		err = notif.Dispatch([]alertmgrtmpl.Alert{}, "unknown-room")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "no provider configured for room: unknown-room")
+		assert.Contains(t, err.Error(), "test-room")
+	})
+
+	t.Run("returns hint for kubernetes namespaced room", func(t *testing.T) {
+		prov := &mockProvider{id: "google_chat", room: "alertas"}
+
+		notif, err := Init(Opts{
+			Providers: []providers.Provider{prov},
+			Log:       lo,
+		})
+		require.NoError(t, err)
+
+		err = notif.Dispatch([]alertmgrtmpl.Alert{}, "cattle-monitoring-system/alertas/alertas")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "room_name=")
+		assert.Contains(t, err.Error(), "Kubernetes")
 	})
 
 	t.Run("dispatches to multiple rooms", func(t *testing.T) {

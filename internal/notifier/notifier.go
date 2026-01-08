@@ -3,6 +3,7 @@ package notifier
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/mr-karan/calert/internal/providers"
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
@@ -40,13 +41,25 @@ func Init(opts Opts) (Notifier, error) {
 func (n *Notifier) Dispatch(alerts []alertmgrtmpl.Alert, room string) error {
 	n.lo.Info("dispatching alerts", "count", len(alerts))
 
-	// Lookup for the provider by the room name.
 	if _, ok := n.providers[room]; !ok {
-		n.lo.Error("no provider available for room", "room", room)
-		return fmt.Errorf("no provider configured for room: %s", room)
-	}
-	// Push the batch of alerts.
-	n.providers[room].Push(alerts)
+		availableRooms := make([]string, 0, len(n.providers))
+		for r := range n.providers {
+			availableRooms = append(availableRooms, r)
+		}
 
+		n.lo.Error("no provider available for room",
+			"room", room,
+			"available_rooms", availableRooms,
+		)
+
+		hint := ""
+		if strings.Contains(room, "/") {
+			hint = " (hint: Kubernetes AlertmanagerConfig prefixes receiver with namespace/config-name - use ?room_name= query param to override)"
+		}
+
+		return fmt.Errorf("no provider configured for room: %s, available: %v%s", room, availableRooms, hint)
+	}
+
+	n.providers[room].Push(alerts)
 	return nil
 }
