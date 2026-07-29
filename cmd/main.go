@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -19,9 +20,10 @@ var (
 // App is the global contains
 // instances of various objects used in the lifecyle of program.
 type App struct {
-	lo       *slog.Logger
-	metrics  *metrics.Manager
-	notifier notifier.Notifier
+	lo              *slog.Logger
+	metrics         *metrics.Manager
+	notifier        notifier.Notifier
+	dispatchTimeout time.Duration
 }
 
 func main() {
@@ -36,10 +38,7 @@ func main() {
 	)
 
 	// Initialise logger.
-	verbose := false
-	if ko.String("app.log") == "debug" {
-		verbose = true
-	}
+	verbose := ko.String("app.log") == "debug"
 	lo := initLogger(verbose)
 
 	// Initialise providers.
@@ -57,9 +56,10 @@ func main() {
 	}
 
 	app := &App{
-		lo:       lo,
-		notifier: notifier,
-		metrics:  metrics,
+		lo:              lo,
+		notifier:        notifier,
+		metrics:         metrics,
+		dispatchTimeout: dispatchTimeout(ko.MustDuration("app.server_timeout")),
 	}
 
 	app.lo.Info("starting calert", "version", buildString, "verbose", verbose)
@@ -96,6 +96,25 @@ func main() {
 		app.lo.Error("couldn't start server", "error", err)
 		exit()
 	}
+}
+
+// dispatchTimeout leaves a cushion below WriteTimeout so the handler can send
+// a retryable response when an upstream delivery deadline expires.
+func dispatchTimeout(serverTimeout time.Duration) time.Duration {
+	if serverTimeout <= 0 {
+		return time.Second
+	}
+	if serverTimeout <= 2*time.Millisecond {
+		return max(time.Nanosecond, serverTimeout/2)
+	}
+	cushion := serverTimeout / 10
+	if cushion < time.Millisecond {
+		cushion = time.Millisecond
+	}
+	if cushion >= serverTimeout {
+		return serverTimeout / 2
+	}
+	return serverTimeout - cushion
 }
 
 func exit() {

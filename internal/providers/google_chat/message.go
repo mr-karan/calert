@@ -2,134 +2,121 @@ package google_chat
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
-	"strings"
+	"unicode/utf8"
 
+	retryablehttp "github.com/hashicorp/go-retryablehttp"
 	chatv1 "google.golang.org/api/chat/v1"
 )
 
-const (
-	maxMsgSize = 4096
-)
+const maxMsgSize = 4096
 
-// prepareMessage accepts a template context (a single Alert in legacy mode,
-// a GroupTemplateContext in group mode) and templates out with the user
-// provided template. It also splits the alerts if the combined size exceeds
-// the limit of 4096 bytes by G-Chat Webhook API
+// prepareMessage renders text and CardsV2 independently. Only text is split
+// to maxMsgSize bytes; CardsV2 has no verified size limit in this client.
 func (m *GoogleChatManager) prepareMessage(alert any) ([]chatv1.Message, error) {
-	var (
-		str    strings.Builder
-		toText bytes.Buffer
-		toCard bytes.Buffer
-		msg    chatv1.Message
-		card   chatv1.CardWithId
-	)
+	var toText, toCard bytes.Buffer
 
-	messages := make([]chatv1.Message, 0)
-
-	// Render a template with alert data.
-	err := m.msgTmpl.Execute(&toText, alert)
-	if err != nil {
-		m.lo.Error("Error parsing values in template", "error", err)
-		return messages, err
+	if err := m.msgTmpl.Execute(&toText, alert); err != nil {
+		m.lo.Error("error parsing values in template", "error", err)
+		return nil, err
 	}
 	if m.msgTmpl.Lookup("cardsV2") != nil {
-		err = m.msgTmpl.ExecuteTemplate(&toCard, "cardsV2", alert)
-		if err != nil {
-			m.lo.Error("Error parsing values in template", "error", err)
-			return messages, err
+		if err := m.msgTmpl.ExecuteTemplate(&toCard, "cardsV2", alert); err != nil {
+			m.lo.Error("error parsing values in template", "error", err)
+			return nil, err
 		}
 	}
 
-	// Split the message if it exceeds the limit.
-	if (len(str.String()) + len(toText.String())) >= maxMsgSize {
-		msg.Text = str.String()
-		messages = append(messages, msg)
-		str.Reset()
-	}
-
-	// Convert the template bytes to string.
-	if len(toText.String()) > 0 {
-		str.WriteString(toText.String())
-		str.WriteString("\n")
-		msg.Text = str.String()
-	}
-	// Unmarshal the template bytes to the card struct
-	if len(toCard.String()) > 0 {
-		err = json.Unmarshal([]byte(toCard.String()), &card)
-		if err != nil {
-			m.lo.Error("Error unmarshalling card message", "error", err)
-			return messages, err
+	messages := make([]chatv1.Message, 0)
+	if toText.Len() > 0 {
+		for _, text := range splitText(withLegacyNewline(toText.String()), maxMsgSize) {
+			messages = append(messages, chatv1.Message{Text: text})
 		}
-		msg.CardsV2 = []*chatv1.CardWithId{&card}
 	}
-
-	// Add the message to batch.
-	messages = append(messages, msg)
-
+	if toCard.Len() > 0 {
+		var card chatv1.CardWithId
+		if err := json.Unmarshal(toCard.Bytes(), &card); err != nil {
+			m.lo.Error("error unmarshalling card message", "error", err)
+			return nil, err
+		}
+		if len(messages) == 0 {
+			messages = append(messages, chatv1.Message{})
+		}
+		messages[len(messages)-1].CardsV2 = []*chatv1.CardWithId{&card}
+	}
 	return messages, nil
 }
 
+// withLegacyNewline preserves the historic trailing newline without creating
+// a newline-only chunk when rendered text is exactly a message boundary.
+func withLegacyNewline(text string) string {
+	if len(text)%maxMsgSize == 0 {
+		return text
+	}
+	return text + "\n"
+}
+
+func splitText(text string, limit int) []string {
+	if text == "" {
+		return nil
+	}
+	chunks := make([]string, 0, (len(text)+limit-1)/limit)
+	start, size := 0, 0
+	for index, r := range text {
+		runeSize := utf8.RuneLen(r)
+		if size > 0 && size+runeSize > limit {
+			chunks = append(chunks, text[start:index])
+			start, size = index, 0
+		}
+		size += runeSize
+	}
+	if start < len(text) {
+		chunks = append(chunks, text[start:])
+	}
+	return chunks
+}
+
 // sendMessage pushes out a notification to Google Chat space.
-func (m *GoogleChatManager) sendMessage(msg chatv1.Message, threadKey string, threaded bool) error {
+func (m *GoogleChatManager) sendMessage(ctx context.Context, msg chatv1.Message, threadKey string, threaded bool) error {
 	out, err := json.Marshal(msg)
 	if err != nil {
-		return err
+		return fmt.Errorf("encoding Google Chat message")
 	}
 
-	// Parse the webhook URL to add `?threadKey` param.
 	u, err := url.Parse(m.endpoint)
 	if err != nil {
-		return err
+		return fmt.Errorf("building Google Chat request")
 	}
 	q := u.Query()
-	// Default behaviour is to start a new thread for every alert.
 	q.Set("messageReplyOption", "MESSAGE_REPLY_OPTION_UNSPECIFIED")
 	if threaded {
-		// If threaded replies are enabled, use the threadKey to reply to the same thread.
 		q.Set("messageReplyOption", "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD")
 		q.Set("threadKey", threadKey)
 	}
 	u.RawQuery = q.Encode()
-	endpoint := u.String()
 
-	// Send the request.
 	hasCard := len(msg.CardsV2) > 0
-	m.lo.Debug("sending alert", "url", endpoint, "msg", msg.Text, "hasCardsV2", hasCard, "payload", string(out))
-	resp, err := m.client.Post(endpoint, "application/json", bytes.NewBuffer(out))
+	m.lo.Debug("sending alert", "threaded", threaded, "has_cards_v2", hasCard, "payload_bytes", len(out))
+	req, err := retryablehttp.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(out))
 	if err != nil {
-		return err
+		return fmt.Errorf("building Google Chat request")
 	}
-	defer resp.Body.Close()
-
-	// If response is non 200, log and throw the error.
-	if resp.StatusCode != http.StatusOK {
-		// Read the response body
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			// Log the error if unable to read the response body
-			m.lo.Error("Failed to read response body", "error", err)
-			return fmt.Errorf("failed to read response body")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := m.client.Do(req)
+	if err != nil {
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
 		}
-		// Ensure the original response body is closed
-		defer resp.Body.Close()
-
-		// Convert the body bytes to a string for logging
-		responseBody := string(bodyBytes)
-
-		// Log the status code and response body at the debug level
-		m.lo.Debug("Non OK HTTP Response received from Google Chat Webhook endpoint", "status", resp.StatusCode, "responseBody", responseBody)
-
-		// Since the body has been read, if you need to use it later,
-		// you may need to reassign resp.Body with a new reader
-		resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-
-		return fmt.Errorf("non ok response from gchat")
+		return fmt.Errorf("sending Google Chat request")
 	}
+	defer func() { _ = resp.Body.Close() }()
 
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("google chat returned status %d", resp.StatusCode)
+	}
 	return nil
 }

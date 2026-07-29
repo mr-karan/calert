@@ -1,6 +1,7 @@
 package google_chat
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"net/http"
@@ -32,7 +33,7 @@ func newCapturingServer() *capturingServer {
 		cs.bodies = append(cs.bodies, string(body))
 		cs.mu.Unlock()
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	}))
 	return cs
 }
@@ -52,11 +53,6 @@ func (cs *capturingServer) lastBody() string {
 	return cs.bodies[len(cs.bodies)-1]
 }
 
-func newGroupModeChat(t *testing.T, endpoint string) *GoogleChatManager {
-	t.Helper()
-	return newGroupModeChatStore(t, endpoint, "")
-}
-
 // newGroupModeChatStore builds a group-mode provider backed by the memory
 // store (backend == "memory") or a Redis store on a fresh per-call miniredis
 // (backend == "redis"). A fresh Redis per call keeps subtests isolated, just
@@ -69,15 +65,16 @@ func newGroupModeChatStore(t *testing.T, endpoint, backend string) *GoogleChatMa
 		redisAddr = miniredis.RunT(t).Addr()
 	}
 	chat, err := NewGoogleChat(GoogleChatOpts{
-		Log:           slog.New(slog.NewJSONHandler(os.Stdout, nil)),
-		Metrics:       metrics.New("calert"),
-		Endpoint:      endpoint,
-		Room:          "test",
-		Template:      "../../../static/message-group.tmpl",
-		ThreadingMode: ThreadingModeGroup,
-		ThreadTTL:     12 * time.Hour,
-		DedupWindow:   5 * time.Minute,
-		RedisAddress:  redisAddr,
+		Log:             slog.New(slog.NewJSONHandler(os.Stdout, nil)),
+		Metrics:         metrics.New("calert"),
+		Endpoint:        endpoint,
+		Room:            "test",
+		Template:        "../../../static/message-group.tmpl",
+		ThreadingMode:   ThreadingModeGroup,
+		ThreadTTL:       12 * time.Hour,
+		DedupWindow:     5 * time.Minute,
+		MaxAlertsPerMsg: 10,
+		RedisAddress:    redisAddr,
 	})
 	require.NoError(t, err)
 	return chat
@@ -105,11 +102,11 @@ func testGroupModeDispatch(t *testing.T, backend string) {
 			groupAlert("b", "firing", "node2"),
 		)
 
-		require.NoError(t, chat.Push(payload))
+		require.NoError(t, chat.Push(context.Background(), payload))
 
 		keys := srv.keys()
 		require.Len(t, keys, 1, "one webhook payload must produce exactly one message")
-		expected := threadKeyForGroup(payload.GroupKey, time.Now(), 12*time.Hour)
+		expected := threadKeyForGroup(chat.Room(), payload.GroupKey)
 		assert.Equal(t, expected, keys[0])
 	})
 
@@ -120,8 +117,8 @@ func testGroupModeDispatch(t *testing.T, backend string) {
 
 		payload := groupPayload(groupAlert("a", "firing", "node1"))
 
-		require.NoError(t, chat.Push(payload))
-		require.NoError(t, chat.Push(payload))
+		require.NoError(t, chat.Push(context.Background(), payload))
+		require.NoError(t, chat.Push(context.Background(), payload))
 		assert.Len(t, srv.keys(), 1, "duplicate payload within window must be dropped")
 	})
 
@@ -130,8 +127,8 @@ func testGroupModeDispatch(t *testing.T, backend string) {
 		defer srv.Close()
 		chat := newGroupModeChatStore(t, srv.URL, backend)
 
-		require.NoError(t, chat.Push(groupPayload(groupAlert("a", "firing", "node1"))))
-		require.NoError(t, chat.Push(groupPayload(
+		require.NoError(t, chat.Push(context.Background(), groupPayload(groupAlert("a", "firing", "node1"))))
+		require.NoError(t, chat.Push(context.Background(), groupPayload(
 			groupAlert("a", "firing", "node1"),
 			groupAlert("b", "firing", "node2"),
 		)))
@@ -149,16 +146,16 @@ func testGroupModeDispatch(t *testing.T, backend string) {
 		firing := groupPayload(groupAlert("a", "firing", "node1"))
 		resolved := groupPayload(groupAlert("a", "resolved", "node1"))
 
-		require.NoError(t, chat.Push(firing))    // key 1
-		require.NoError(t, chat.Push(resolved))  // key 2: firing→resolved transition
+		require.NoError(t, chat.Push(context.Background(), firing))   // key 1
+		require.NoError(t, chat.Push(context.Background(), resolved)) // key 2: firing→resolved transition
 		// State is kept after full resolve (TTL forgets it later), so an
 		// identical resolved re-send within the window — e.g. from the second
 		// Alertmanager — is suppressed instead of posting a duplicate card.
-		require.NoError(t, chat.Push(resolved))
+		require.NoError(t, chat.Push(context.Background(), resolved))
 		assert.Len(t, srv.keys(), 2)
 
 		// A genuine refire is a new state hash, so it posts.
-		require.NoError(t, chat.Push(firing))
+		require.NoError(t, chat.Push(context.Background(), firing))
 		assert.Len(t, srv.keys(), 3)
 	})
 
@@ -168,11 +165,11 @@ func testGroupModeDispatch(t *testing.T, backend string) {
 		chat := newGroupModeChatStore(t, srv.URL, backend)
 
 		// Two instances fire, then both resolve (fully resolved card posted).
-		require.NoError(t, chat.Push(groupPayload(
+		require.NoError(t, chat.Push(context.Background(), groupPayload(
 			groupAlert("a", "firing", "node1"),
 			groupAlert("b", "firing", "node2"),
 		)))
-		require.NoError(t, chat.Push(groupPayload(
+		require.NoError(t, chat.Push(context.Background(), groupPayload(
 			groupAlert("a", "resolved", "node1"),
 			groupAlert("b", "resolved", "node2"),
 		)))
@@ -181,7 +178,7 @@ func testGroupModeDispatch(t *testing.T, backend string) {
 		// members in the same group. They were already shown resolved, so the
 		// body must show only the new firing instance — not the old resolved
 		// ones reappearing.
-		require.NoError(t, chat.Push(groupPayload(
+		require.NoError(t, chat.Push(context.Background(), groupPayload(
 			groupAlert("c", "firing", "node3"),
 			groupAlert("a", "resolved", "node1"),
 			groupAlert("b", "resolved", "node2"),
@@ -205,11 +202,11 @@ func testGroupModeShowsResolvedOnlyOnce(t *testing.T, backend string) {
 	chat := newGroupModeChatStore(t, srv.URL, backend)
 
 	// node2 resolves: its transition is rendered.
-	require.NoError(t, chat.Push(groupPayload(
+	require.NoError(t, chat.Push(context.Background(), groupPayload(
 		groupAlert("a", "firing", "node1"),
 		groupAlert("b", "firing", "node2"),
 	)))
-	require.NoError(t, chat.Push(groupPayload(
+	require.NoError(t, chat.Push(context.Background(), groupPayload(
 		groupAlert("a", "firing", "node1"),
 		groupAlert("b", "resolved", "node2"),
 	)))
@@ -217,7 +214,7 @@ func testGroupModeShowsResolvedOnlyOnce(t *testing.T, backend string) {
 
 	// node1 resolves next: node2 was already shown as resolved and must
 	// not reappear, and the header counts only the rendered node1.
-	require.NoError(t, chat.Push(groupPayload(
+	require.NoError(t, chat.Push(context.Background(), groupPayload(
 		groupAlert("a", "resolved", "node1"),
 		groupAlert("b", "resolved", "node2"),
 	)))

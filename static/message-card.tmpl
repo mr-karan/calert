@@ -3,13 +3,13 @@
   "card": {
     "sections": [
       {
-        "header": "<b>({{.Labels.severity | toUpper }}) {{ .Labels.alertname | Title }} - {{.Status | Title }}</b>",
+        "header": {{ json (printf "<b>(%s) %s - %s</b>" (.Labels.severity | toUpper) (.Labels.alertname | Title) (.Status | Title)) }},
         "widgets": [
           {{- range $i, $pair := .Annotations.SortedPairs -}}
           {{- if ne $i 0 -}},{{- end -}}
           {
             "decoratedText": {
-              "text": "{{ $pair.Name | Title }}: {{ $pair.Value}}"
+              "text": {{ json (printf "%s: %s" ($pair.Name | Title) $pair.Value) }}
             }
           }
           {{- end -}}

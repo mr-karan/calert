@@ -1,6 +1,7 @@
 package google_chat
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -10,44 +11,79 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mr-karan/calert/internal/providers"
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
 )
 
-// threadKeyForGroup derives a deterministic Google Chat thread key from the
-// Alertmanager GroupKey and a wall-clock time bucket. Both calert instances
-// behind clustered Alertmanagers compute the same key for the same group
-// without any shared state, so their messages converge into one thread.
-// Still-firing groups roll into a new thread at each bucket boundary.
-func threadKeyForGroup(groupKey string, now time.Time, bucket time.Duration) string {
-	b := now.Unix() / int64(bucket.Seconds())
-	sum := sha256.Sum256([]byte(fmt.Sprintf("%s:%d", groupKey, b)))
-	return hex.EncodeToString(sum[:])
+// threadKeyForGroup is stable for a room and Alertmanager group. threadTTL
+// controls state retention only; it never rolls a still-active group into a
+// different Google Chat thread.
+func threadKeyForGroup(room, groupKey string) string {
+	return hashKey(room, groupKey)
 }
 
-// stateHash summarises a payload as the set of (fingerprint → status) pairs.
-// It deliberately excludes timestamps and annotation values, which can differ
-// between Alertmanager cluster nodes and would defeat duplicate detection.
-func stateHash(alerts []alertmgrtmpl.Alert) string {
-	pairs := make([]string, 0, len(alerts))
-	for _, a := range alerts {
-		pairs = append(pairs, a.Fingerprint+"="+a.Status)
+// threadKeyForAlert is the legacy per-alert thread key. StartsAt distinguishes
+// a refire from the previous alert lifecycle while keeping firing and resolved
+// notifications for the same lifecycle in one thread across restarts.
+func threadKeyForAlert(room, fingerprint string, startsAt time.Time) string {
+	return hashKey(room, fingerprint, startsAt.UTC().Format(time.RFC3339Nano))
+}
+
+func hashKey(parts ...string) string {
+	h := sha256.New()
+	for _, part := range parts {
+		h.Write([]byte(part))
+		h.Write([]byte{0})
 	}
-	sort.Strings(pairs)
-	sum := sha256.Sum256([]byte(strings.Join(pairs, ",")))
-	return hex.EncodeToString(sum[:])
+	return hex.EncodeToString(h.Sum(nil))
 }
 
-// groupState holds the last posted notification for one alert group.
+// stateHash captures the notification content that users can observe, apart
+// from timestamps that vary between Alertmanager peers. Sorting makes it
+// independent of alert, label, and annotation ordering.
+func stateHash(payload providers.WebhookPayload) string {
+	entries := make([]string, 0, len(payload.Alerts))
+	for _, a := range payload.Alerts {
+		entries = append(entries, strings.Join([]string{
+			a.Fingerprint,
+			a.Status,
+			canonicalKV(a.Labels),
+			canonicalKV(a.Annotations),
+			a.GeneratorURL,
+		}, "\x00"))
+	}
+	sort.Strings(entries)
+	return hashKey(
+		payload.Status,
+		payload.GroupKey,
+		canonicalKV(payload.GroupLabels),
+		canonicalKV(payload.CommonLabels),
+		fmt.Sprintf("%d", payload.TruncatedAlerts),
+		strings.Join(entries, "\x01"),
+	)
+}
+
+func canonicalKV(kv alertmgrtmpl.KV) string {
+	keys := make([]string, 0, len(kv))
+	for key := range kv {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, key+"\x00"+kv[key])
+	}
+	return strings.Join(parts, "\x01")
+}
+
+// groupState holds the last successfully delivered notification for a group.
 type groupState struct {
-	lastHash string
-	lastPost time.Time
-	// lastStatuses records the fingerprint → status pairs of the last
-	// posted payload, so an instance already shown as resolved can be
-	// omitted from subsequent messages.
+	lastHash     string
+	lastPost     time.Time
 	lastStatuses map[string]string
 }
 
-// statusesOf extracts the fingerprint → status pairs of a payload.
 func statusesOf(alerts []alertmgrtmpl.Alert) map[string]string {
 	statuses := make(map[string]string, len(alerts))
 	for _, a := range alerts {
@@ -56,79 +92,52 @@ func statusesOf(alerts []alertmgrtmpl.Alert) map[string]string {
 	return statuses
 }
 
-// groupStateStore is the dispatch path's view of group dedup state. It has a
-// memory implementation (default) and a Redis implementation (shared across
-// active-active instances). The dispatcher is agnostic to which one it holds.
-//
-// shouldPost returns post=false only for a cluster-race duplicate, the new
-// state plus the *previous* statuses otherwise, and a non-nil err when the
-// store was unreachable — on err the dispatcher fails open and posts anyway.
-// delete is intentionally absent: group state is never deleted on the dispatch
-// path (pushGroup relies on TTL to reap state, not explicit deletes). Both
-// implementations keep a delete method for tests only.
+// groupStateStore deliberately separates inspection from commit. A failed
+// render or send must not suppress a retry, so state is committed only after
+// every message has been delivered.
 type groupStateStore interface {
-	shouldPost(groupKey, hash string, statuses map[string]string, now time.Time, window time.Duration) (map[string]string, bool, error)
+	inspect(ctx context.Context, room, groupKey, hash string, now time.Time, window time.Duration) (groupState, bool, error)
+	commit(ctx context.Context, room, groupKey string, state groupState) error
 }
 
-// memoryStore tracks per-group posting state, in memory only. Losing it on
-// restart costs at most one duplicate message and a reset dedup window.
 type memoryStore struct {
-	lo *slog.Logger
+	lo  *slog.Logger
+	ttl time.Duration
 	sync.Mutex
 	groups map[string]groupState
 }
 
-func newMemoryStore(lo *slog.Logger) *memoryStore {
-	return &memoryStore{
-		lo:     lo,
-		groups: make(map[string]groupState),
-	}
+func newMemoryStore(lo *slog.Logger, ttl time.Duration) *memoryStore {
+	return &memoryStore{lo: lo, ttl: ttl, groups: make(map[string]groupState)}
 }
 
-// shouldPost decides whether a payload with the given state hash must be
-// posted. It returns false only for a cluster-race duplicate: an identical
-// hash arriving within the dedup window of the last post. When it returns
-// true, the new state (hash and fingerprint → status pairs) is recorded and
-// the *previous* statuses are returned, so the caller can omit instances
-// already shown as resolved. The memory store never errors.
-func (g *memoryStore) shouldPost(groupKey, hash string, statuses map[string]string, now time.Time, window time.Duration) (map[string]string, bool, error) {
+func (g *memoryStore) inspect(_ context.Context, room, groupKey, hash string, now time.Time, window time.Duration) (groupState, bool, error) {
 	g.Lock()
 	defer g.Unlock()
 
-	st, ok := g.groups[groupKey]
-	if ok && st.lastHash == hash && now.Sub(st.lastPost) < window {
-		return nil, false, nil
+	key := groupStoreKey(room, groupKey)
+	state := g.groups[key]
+	if !state.lastPost.IsZero() && now.Sub(state.lastPost) >= g.ttl {
+		delete(g.groups, key)
+		state = groupState{}
 	}
-
-	g.groups[groupKey] = groupState{lastHash: hash, lastPost: now, lastStatuses: statuses}
-	return st.lastStatuses, true, nil
+	if !state.lastPost.IsZero() && state.lastHash == hash && now.Sub(state.lastPost) < window {
+		return state, true, nil
+	}
+	return state, false, nil
 }
 
-// delete removes a group's state, called when all of its alerts resolved.
-func (g *memoryStore) delete(groupKey string) {
+func (g *memoryStore) commit(_ context.Context, room, groupKey string, state groupState) error {
 	g.Lock()
 	defer g.Unlock()
-	delete(g.groups, groupKey)
+	key := groupStoreKey(room, groupKey)
+	if previous, ok := g.groups[key]; ok && state.lastPost.Before(previous.lastPost) {
+		return nil
+	}
+	g.groups[key] = state
+	return nil
 }
 
-// prune removes groups whose last post is older than ttl, as a backstop for
-// groups that never report a fully-resolved payload.
-func (g *memoryStore) prune(now time.Time, ttl time.Duration) {
-	g.Lock()
-	defer g.Unlock()
-
-	for k, st := range g.groups {
-		if st.lastPost.Before(now.Add(-ttl)) {
-			g.lo.Debug("pruning group state", "group_key", k, "last_post", st.lastPost)
-			delete(g.groups, k)
-		}
-	}
-}
-
-// startPruneWorker periodically prunes stale group state. Blocking; run as a
-// goroutine.
-func (g *memoryStore) startPruneWorker(pruneInterval, ttl time.Duration) {
-	for range time.NewTicker(pruneInterval).C {
-		g.prune(time.Now(), ttl)
-	}
+func groupStoreKey(room, groupKey string) string {
+	return hashKey(room, groupKey)
 }

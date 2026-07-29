@@ -1,6 +1,8 @@
 package notifier
 
 import (
+	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"testing"
@@ -27,7 +29,7 @@ func (m *mockProvider) Room() string {
 	return m.room
 }
 
-func (m *mockProvider) Push(payload providers.WebhookPayload) error {
+func (m *mockProvider) Push(ctx context.Context, payload providers.WebhookPayload) error {
 	m.pushed = payload.Alerts
 	return m.pushErr
 }
@@ -91,12 +93,20 @@ func TestDispatch(t *testing.T) {
 			{Fingerprint: "alert2"},
 		}}}
 
-		err = notif.Dispatch(payload, "test-room")
+		err = notif.Dispatch(context.Background(), payload, "test-room")
 		require.NoError(t, err)
 
 		assert.Len(t, prov.pushed, 2)
 		assert.Equal(t, "alert1", prov.pushed[0].Fingerprint)
 		assert.Equal(t, "alert2", prov.pushed[1].Fingerprint)
+	})
+
+	t.Run("returns provider push errors", func(t *testing.T) {
+		pushErr := errors.New("upstream unavailable")
+		prov := &mockProvider{id: "google_chat", room: "test-room", pushErr: pushErr}
+		notif, err := Init(Opts{Providers: []providers.Provider{prov}, Log: lo})
+		require.NoError(t, err)
+		assert.ErrorIs(t, notif.Dispatch(context.Background(), providers.WebhookPayload{}, "test-room"), pushErr)
 	})
 
 	t.Run("returns error for unknown room with available rooms", func(t *testing.T) {
@@ -108,7 +118,7 @@ func TestDispatch(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		err = notif.Dispatch(providers.WebhookPayload{}, "unknown-room")
+		err = notif.Dispatch(context.Background(), providers.WebhookPayload{}, "unknown-room")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "no provider configured for room: unknown-room")
 		assert.Contains(t, err.Error(), "test-room")
@@ -123,7 +133,7 @@ func TestDispatch(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		err = notif.Dispatch(providers.WebhookPayload{}, "cattle-monitoring-system/alertas/alertas")
+		err = notif.Dispatch(context.Background(), providers.WebhookPayload{}, "cattle-monitoring-system/alertas/alertas")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "room_name=")
 		assert.Contains(t, err.Error(), "Kubernetes")
@@ -142,10 +152,10 @@ func TestDispatch(t *testing.T) {
 		alertsRoom1 := providers.WebhookPayload{Data: alertmgrtmpl.Data{Alerts: []alertmgrtmpl.Alert{{Fingerprint: "alert-room1"}}}}
 		alertsRoom2 := providers.WebhookPayload{Data: alertmgrtmpl.Data{Alerts: []alertmgrtmpl.Alert{{Fingerprint: "alert-room2"}}}}
 
-		err = notif.Dispatch(alertsRoom1, "room1")
+		err = notif.Dispatch(context.Background(), alertsRoom1, "room1")
 		require.NoError(t, err)
 
-		err = notif.Dispatch(alertsRoom2, "room2")
+		err = notif.Dispatch(context.Background(), alertsRoom2, "room2")
 		require.NoError(t, err)
 
 		assert.Equal(t, "alert-room1", prov1.pushed[0].Fingerprint)

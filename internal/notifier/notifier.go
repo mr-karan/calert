@@ -1,6 +1,7 @@
 package notifier
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -37,7 +38,7 @@ func Init(opts Opts) (Notifier, error) {
 }
 
 // Dispatch pushes out a notification to an upstream provider.
-func (n *Notifier) Dispatch(payload providers.WebhookPayload, room string) error {
+func (n *Notifier) Dispatch(ctx context.Context, payload providers.WebhookPayload, room string) error {
 	n.lo.Info("dispatching alerts", "count", len(payload.Alerts))
 
 	if _, ok := n.providers[room]; !ok {
@@ -59,6 +60,5 @@ func (n *Notifier) Dispatch(payload providers.WebhookPayload, room string) error
 		return fmt.Errorf("no provider configured for room: %s, available: %v%s", room, availableRooms, hint)
 	}
 
-	n.providers[room].Push(payload)
-	return nil
+	return n.providers[room].Push(ctx, payload)
 }

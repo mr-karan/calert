@@ -71,8 +71,8 @@ func initConfig(cfgDefault string, envPrefix string) (*koanf.Koanf, error) {
 	// and merge into the loaded config.
 	if envPrefix != "" {
 		err = ko.Load(env.Provider(envPrefix, ".", func(s string) string {
-			return strings.Replace(strings.ToLower(
-				strings.TrimPrefix(s, envPrefix)), "__", ".", -1)
+			return strings.ReplaceAll(strings.ToLower(
+				strings.TrimPrefix(s, envPrefix)), "__", ".")
 		}), nil)
 		if err != nil {
 			return nil, err
@@ -108,7 +108,9 @@ func initProviders(ko *koanf.Koanf, lo *slog.Logger, metrics *metrics.Manager) (
 		// Set default values for the provider if not set in config.
 		for valKey, defaultVal := range provDefOpts {
 			if !ko.Exists(fmt.Sprintf("%s.%s", cfgKey, valKey)) {
-				ko.Set(fmt.Sprintf("%s.%s", cfgKey, valKey), defaultVal)
+				if err := ko.Set(fmt.Sprintf("%s.%s", cfgKey, valKey), defaultVal); err != nil {
+					return nil, fmt.Errorf("setting provider default %s: %w", valKey, err)
+				}
 			}
 		}
 
@@ -138,7 +140,7 @@ func initProviders(ko *koanf.Koanf, lo *slog.Logger, metrics *metrics.Manager) (
 				RedisDB:         ko.Int(fmt.Sprintf("%s.redis.db", cfgKey)),
 				RedisKeyPrefix:  ko.String(fmt.Sprintf("%s.redis.key_prefix", cfgKey)),
 			}
-			lo.Debug("provider options", "type", provType, "options", opts)
+			lo.Debug("provider options", "type", provType, "room", name, "threading_mode", opts.ThreadingMode, "dry_run", opts.DryRun)
 
 			gchat, err := google_chat.NewGoogleChat(opts)
 			if err != nil {

@@ -4,7 +4,6 @@ require (
 	github.com/VictoriaMetrics/metrics v1.44.0
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/go-chi/chi/v5 v5.3.1
-	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/hashicorp/go-retryablehttp v0.7.8
 	github.com/knadh/koanf v1.5.0
 	github.com/prometheus/alertmanager v0.33.1

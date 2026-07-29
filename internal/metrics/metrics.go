@@ -64,8 +64,8 @@ func (s *Manager) FlushMetrics(buf io.Writer) {
 	s.metrics.WritePrometheus(buf)
 
 	// Export start time and uptime in seconds
-	fmt.Fprintf(buf, "calert_start_timestamp %d\n", s.startTime.Unix())
-	fmt.Fprintf(buf, "calert_uptime_seconds %d\n", int(time.Since(s.startTime).Seconds()))
+	_, _ = fmt.Fprintf(buf, "calert_start_timestamp %d\n", s.startTime.Unix())
+	_, _ = fmt.Fprintf(buf, "calert_uptime_seconds %d\n", int(time.Since(s.startTime).Seconds()))
 }
 
 // getFormattedLabel prefixes the label with namespace (if non empty).
