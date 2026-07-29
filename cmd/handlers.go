@@ -9,10 +9,12 @@ import (
 	prvs "github.com/mr-karan/calert/internal/providers"
 )
 
-// wrap is a middleware that wraps HTTP handlers and injects the "app" context.
+type appContextKey struct{}
+
+// wrap is a middleware that wraps HTTP handlers and injects the app context.
 func wrap(app *App, next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), "app", app)
+		ctx := context.WithValue(r.Context(), appContextKey{}, app)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -34,7 +36,7 @@ func sendResponse(w http.ResponseWriter, data interface{}) {
 		return
 	}
 
-	w.Write(out)
+	_, _ = w.Write(out)
 }
 
 // sendErrorResponse sends a JSON error envelope to the HTTP response.
@@ -47,13 +49,13 @@ func sendErrorResponse(w http.ResponseWriter, message string, code int, data int
 		Data:    data}
 	out, _ := json.Marshal(resp)
 
-	w.Write(out)
+	_, _ = w.Write(out)
 }
 
 // Index page.
 func handleIndex(w http.ResponseWriter, r *http.Request) {
 	var (
-		app = r.Context().Value("app").(*App)
+		app = r.Context().Value(appContextKey{}).(*App)
 	)
 	app.metrics.Increment(`http_requests_total{handler="index"}`)
 	sendResponse(w, "welcome to calert!")
@@ -62,7 +64,7 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 // Health check.
 func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	var (
-		app = r.Context().Value("app").(*App)
+		app = r.Context().Value(appContextKey{}).(*App)
 	)
 	app.metrics.Increment(`http_requests_total{handler="ping"}`)
 	sendResponse(w, "pong")
@@ -71,7 +73,7 @@ func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 // Export prometheus metrics.
 func handleMetrics(w http.ResponseWriter, r *http.Request) {
 	var (
-		app = r.Context().Value("app").(*App)
+		app = r.Context().Value(appContextKey{}).(*App)
 	)
 	app.metrics.FlushMetrics(w)
 }
@@ -80,7 +82,7 @@ func handleMetrics(w http.ResponseWriter, r *http.Request) {
 func handleDispatchNotif(w http.ResponseWriter, r *http.Request) {
 	var (
 		now     = time.Now()
-		app     = r.Context().Value("app").(*App)
+		app     = r.Context().Value(appContextKey{}).(*App)
 		payload = prvs.WebhookPayload{}
 	)
 
@@ -101,16 +103,16 @@ func handleDispatchNotif(w http.ResponseWriter, r *http.Request) {
 
 	app.lo.Info("dispatching new alert", "room", roomName, "count", len(payload.Alerts))
 
-	// Dispatch a list of alerts via Notifier.
-	// If there are a lot of alerts (>=10) to push, G-Chat API can be extremely slow to add messages
-	// to an existing thread. So it's better to enqueue it in background.
-	go func() {
-		if err := app.notifier.Dispatch(payload, roomName); err != nil {
-			app.lo.Error("error dispatching alerts", "error", err)
-			app.metrics.Increment(`http_request_errors_total{handler="dispatch"}`)
-		}
+	dispatchCtx, cancel := context.WithTimeout(r.Context(), app.dispatchTimeout)
+	defer cancel()
+	if err := app.notifier.Dispatch(dispatchCtx, payload, roomName); err != nil {
+		app.lo.Error("error dispatching alerts", "error", err)
+		app.metrics.Increment(`http_request_errors_total{handler="dispatch"}`)
 		app.metrics.Duration(`http_request_duration_seconds{handler="dispatch"}`, now)
-	}()
+		sendErrorResponse(w, "Error dispatching alerts.", http.StatusBadGateway, nil)
+		return
+	}
 
+	app.metrics.Duration(`http_request_duration_seconds{handler="dispatch"}`, now)
 	sendResponse(w, "dispatched")
 }

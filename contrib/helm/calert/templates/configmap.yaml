@@ -1,4 +1,4 @@
-{{- if or .Values.templates (not .Values.config.asSecret) }}
+{{- if not .Values.config.asSecret }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -6,12 +6,22 @@ metadata:
   labels:
 {{ include "calert.labels" . | indent 4 }}
 data:
-  {{- range $key, $value := .Values.templates }}
-  {{ $key }}: |-
-    {{- $value | nindent 4 }}
-  {{- end }}
-  {{- if not .Values.config.asSecret }}
   config.toml: |
     {{- include "calert.configToml" . | nindent 4 }}
+{{- end }}
+{{- if .Values.templates }}
+{{- if not .Values.config.asSecret }}
+---
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "calert.fullname" . }}-templates
+  labels:
+{{ include "calert.labels" . | indent 4 }}
+data:
+  {{- range $key, $value := .Values.templates }}
+  {{ $key | quote }}: |-
+    {{- $value | nindent 4 }}
   {{- end }}
 {{- end }}

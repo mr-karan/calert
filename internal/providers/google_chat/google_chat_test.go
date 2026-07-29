@@ -14,7 +14,6 @@ import (
 	"time"
 
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
-	"github.com/mr-karan/calert/internal/metrics"
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,11 +26,11 @@ func TestRetryOn429(t *testing.T) {
 		count := atomic.AddInt32(&requestCount, 1)
 		if count < 3 {
 			w.WriteHeader(http.StatusTooManyRequests)
-			w.Write([]byte(`{"error": {"code": 429, "message": "Rate limited"}}`))
+			_, _ = w.Write([]byte(`{"error": {"code": 429, "message": "Rate limited"}}`))
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"success": true}`))
+		_, _ = w.Write([]byte(`{"success": true}`))
 	}))
 	defer server.Close()
 
@@ -96,7 +95,7 @@ func TestRetryPolicyIntegration(t *testing.T) {
 
 	resp, err := client.Get(server.URL)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, int32(3), atomic.LoadInt32(&requestCount), "Should have made 3 requests (2 retries + 1 success)")
@@ -185,68 +184,6 @@ func TestTemplateFunctionHelpers(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
-}
-
-func TestActiveAlerts(t *testing.T) {
-	lo := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-
-	t.Run("add and lookup alert", func(t *testing.T) {
-		aa := &ActiveAlerts{
-			alerts: make(map[string]AlertDetails),
-			lo:     lo,
-		}
-
-		alert := alertmgrtmpl.Alert{
-			Fingerprint: "abc123",
-			StartsAt:    time.Now(),
-		}
-
-		err := aa.add(alert)
-		require.NoError(t, err)
-
-		uuid := aa.loookup("abc123")
-		assert.NotEmpty(t, uuid)
-		assert.Len(t, uuid, 36)
-	})
-
-	t.Run("lookup non-existent alert returns empty", func(t *testing.T) {
-		aa := &ActiveAlerts{
-			alerts: make(map[string]AlertDetails),
-			lo:     lo,
-		}
-
-		uuid := aa.loookup("nonexistent")
-		assert.Empty(t, uuid)
-	})
-
-	t.Run("prune removes expired alerts", func(t *testing.T) {
-		m := metrics.New("calert")
-		aa := &ActiveAlerts{
-			alerts:  make(map[string]AlertDetails),
-			lo:      lo,
-			metrics: m,
-		}
-
-		oldAlert := alertmgrtmpl.Alert{
-			Fingerprint: "old",
-			StartsAt:    time.Now().Add(-2 * time.Hour),
-		}
-		newAlert := alertmgrtmpl.Alert{
-			Fingerprint: "new",
-			StartsAt:    time.Now(),
-		}
-
-		aa.add(oldAlert)
-		aa.add(newAlert)
-
-		assert.Len(t, aa.alerts, 2)
-
-		aa.Prune(1 * time.Hour)
-
-		assert.Len(t, aa.alerts, 1)
-		assert.Empty(t, aa.loookup("old"))
-		assert.NotEmpty(t, aa.loookup("new"))
-	})
 }
 
 func TestGoogleChatManager(t *testing.T) {

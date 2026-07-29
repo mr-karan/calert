@@ -1,0 +1,33 @@
+FROM ubuntu:24.04 AS runtime-files
+
+ARG CALERT_GID="999"
+ARG CALERT_UID="999"
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates tzdata \
+    && groupadd --gid "${CALERT_GID}" calert \
+    && useradd --uid "${CALERT_UID}" --gid "${CALERT_GID}" --home-dir /app --no-create-home --shell /usr/sbin/nologin calert \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM scratch
+
+ARG TARGETPLATFORM
+ARG CALERT_GID="999"
+ARG CALERT_UID="999"
+
+COPY --from=runtime-files /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=runtime-files /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=runtime-files /etc/passwd /etc/passwd
+COPY --from=runtime-files /etc/group /etc/group
+
+WORKDIR /app
+
+COPY --chown=${CALERT_UID}:${CALERT_GID} ${TARGETPLATFORM}/calert.bin /app/calert.bin
+COPY --chown=${CALERT_UID}:${CALERT_GID} static/ /app/static/
+COPY --chown=${CALERT_UID}:${CALERT_GID} config.sample.toml /app/config.sample.toml
+
+USER calert
+EXPOSE 6000
+
+ENTRYPOINT ["/app/calert.bin"]

@@ -1,6 +1,8 @@
 package providers
 
 import (
+	"context"
+
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
 )
 
@@ -22,5 +24,5 @@ type Provider interface {
 	Room() string
 	// Push pushes the notification for the full Alertmanager webhook
 	// payload to the upstream provider.
-	Push(payload WebhookPayload) error
+	Push(ctx context.Context, payload WebhookPayload) error
 }

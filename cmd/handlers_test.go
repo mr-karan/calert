@@ -23,12 +23,16 @@ type mockProvider struct {
 	room    string
 	pushed  []alertmgrtmpl.Alert
 	pushErr error
+	pushFn  func(context.Context) error
 }
 
 func (m *mockProvider) ID() string   { return "mock" }
 func (m *mockProvider) Room() string { return m.room }
-func (m *mockProvider) Push(payload providers.WebhookPayload) error {
+func (m *mockProvider) Push(ctx context.Context, payload providers.WebhookPayload) error {
 	m.pushed = payload.Alerts
+	if m.pushFn != nil {
+		return m.pushFn(ctx)
+	}
 	return m.pushErr
 }
 
@@ -43,14 +47,15 @@ func newTestApp(t *testing.T, provs ...providers.Provider) *App {
 	require.NoError(t, err)
 
 	return &App{
-		lo:       lo,
-		metrics:  m,
-		notifier: n,
+		lo:              lo,
+		metrics:         m,
+		notifier:        n,
+		dispatchTimeout: time.Second,
 	}
 }
 
 func withAppContext(app *App, r *http.Request) *http.Request {
-	ctx := context.WithValue(r.Context(), "app", app)
+	ctx := context.WithValue(r.Context(), appContextKey{}, app)
 	return r.WithContext(ctx)
 }
 
@@ -132,8 +137,6 @@ func TestHandleDispatchNotif(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "success", response.Status)
 		assert.Equal(t, "dispatched", response.Data)
-
-		time.Sleep(50 * time.Millisecond)
 		assert.Len(t, prov.pushed, 1)
 	})
 
@@ -154,9 +157,55 @@ func TestHandleDispatchNotif(t *testing.T) {
 		handleDispatchNotif(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-
-		time.Sleep(50 * time.Millisecond)
 		assert.Len(t, prov.pushed, 1)
+	})
+
+	t.Run("returns a retryable error when provider delivery fails", func(t *testing.T) {
+		prov := &mockProvider{room: "test-room", pushErr: assert.AnError}
+		app := newTestApp(t, prov)
+		body, err := json.Marshal(alertmgrtmpl.Data{Receiver: "test-room", Alerts: []alertmgrtmpl.Alert{{Fingerprint: "abc"}}})
+		require.NoError(t, err)
+
+		req := withAppContext(app, httptest.NewRequest(http.MethodPost, "/dispatch", bytes.NewReader(body)))
+		w := httptest.NewRecorder()
+		handleDispatchNotif(w, req)
+
+		assert.Equal(t, http.StatusBadGateway, w.Code)
+		assert.Len(t, prov.pushed, 1)
+	})
+
+	t.Run("cancels provider delivery before the HTTP write deadline", func(t *testing.T) {
+		prov := &mockProvider{room: "test-room", pushFn: func(ctx context.Context) error {
+			<-ctx.Done()
+			return ctx.Err()
+		}}
+		app := newTestApp(t, prov)
+		app.dispatchTimeout = 10 * time.Millisecond
+		body, err := json.Marshal(alertmgrtmpl.Data{Receiver: "test-room", Alerts: []alertmgrtmpl.Alert{{Fingerprint: "abc"}}})
+		require.NoError(t, err)
+		started := time.Now()
+		req := withAppContext(app, httptest.NewRequest(http.MethodPost, "/dispatch", bytes.NewReader(body)))
+		w := httptest.NewRecorder()
+		handleDispatchNotif(w, req)
+		assert.Equal(t, http.StatusBadGateway, w.Code)
+		assert.Less(t, time.Since(started), 100*time.Millisecond)
+	})
+
+	t.Run("propagates an already-canceled request context", func(t *testing.T) {
+		prov := &mockProvider{room: "test-room", pushFn: func(ctx context.Context) error {
+			<-ctx.Done()
+			return ctx.Err()
+		}}
+		app := newTestApp(t, prov)
+		body, err := json.Marshal(alertmgrtmpl.Data{Receiver: "test-room", Alerts: []alertmgrtmpl.Alert{{Fingerprint: "abc"}}})
+		require.NoError(t, err)
+		base, cancel := context.WithCancel(context.Background())
+		cancel()
+		req := httptest.NewRequest(http.MethodPost, "/dispatch", bytes.NewReader(body)).WithContext(base)
+		req = withAppContext(app, req)
+		w := httptest.NewRecorder()
+		handleDispatchNotif(w, req)
+		assert.Equal(t, http.StatusBadGateway, w.Code)
 	})
 
 	t.Run("returns error for invalid JSON", func(t *testing.T) {

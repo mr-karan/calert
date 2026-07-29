@@ -29,6 +29,22 @@ helm install calert calert/calert
 helm install calert calert/calert -f values.yaml
 ```
 
+## Configuration storage, templates, and environment sources
+
+Set `config.asSecret=true` to generate a Secret for `config.toml`. When `config.asSecret=true`, set `config.existingSecret.name` and `config.existingSecret.key` to mount an existing Secret instead. Custom `templates` are always stored in a separate ConfigMap, including both Secret modes, so template updates participate in pod rollout checksums.
+
+Use `env` for literal key/value environment variables. Use standard Kubernetes `envFrom` entries for Secret or ConfigMap sources:
+
+```yaml
+envFrom:
+  - secretRef:
+      name: calert-secrets
+  - configMapRef:
+      name: calert-env
+```
+
+Provider values support `threading_mode`, `dedup_window`, and `max_alerts_per_message`. For group threading across replicas, configure the optional nested `redis.address`, `redis.password`, `redis.db`, and `redis.key_prefix` values.
+
 ## Alertmanager Integration
 
 The Alertmanager helm chart can be found [here](https://github.com/prometheus-community/helm-charts/tree/main/charts/alertmanager). You can refer to the following config block to route webhook alerts to `calert`:
@@ -59,6 +75,12 @@ config:
 | app.log | string | `"info"` | Log level. Use `debug` to enable verbose logging |
 | app.server_timeout | string | `"60s"` | Server timeout for HTTP requests |
 | args | list | `["--config=/app/config.toml"]` | Arguments to pass to the calert binary |
+| config | object | See below | Configuration storage options for config.toml |
+| config.asSecret | bool | `false` | Store config.toml in a Kubernetes Secret instead of a ConfigMap |
+| config.existingSecret.name | string | `""` | Existing Secret name. Requires config.asSecret=true |
+| config.existingSecret.key | string | `"config.toml"` | Key in the existing Secret that holds config.toml |
+| env | object | `{}` | Environment variables to set on the container (key/value map) |
+| envFrom | list | `[]` | Kubernetes environment sources. Each entry must contain exactly one secretRef or configMapRef |
 | fullnameOverride | string | `""` | Override the full name of the chart |
 | image | object | `{"pullPolicy":"Always","repository":"ghcr.io/mr-karan/calert","tag":"{{ .Chart.AppVersion }}"}` | Image configuration |
 | image.pullPolicy | string | `"Always"` | Image pull policy |
@@ -84,7 +106,7 @@ config:
 | podSecurityContext.seccompProfile | object | `{"type":"RuntimeDefault"}` | Seccomp profile configuration |
 | podSecurityContext.windowsOptions | object | `{"hostProcess":false}` | Windows-specific options |
 | priorityClassName | string | `""` | Priority class name for pod scheduling |
-| providers | object | `{}` (no providers configured) | Provider configuration for routing alerts to different Google Chat rooms. See [config.sample.toml](https://github.com/mr-karan/calert/blob/main/config.sample.toml) for more details |
+| providers | object | `{}` (no providers configured) | Provider configuration for routing alerts to different Google Chat rooms. Supports threading_mode, dedup_window, max_alerts_per_message, and nested redis settings. See [config.sample.toml](https://github.com/mr-karan/calert/blob/main/config.sample.toml) for more details |
 | readinessProbe | object | `{"periodSeconds":60,"timeoutSeconds":3}` | Readiness probe configuration |
 | readinessProbe.periodSeconds | int | `60` | How often to perform the probe (seconds) |
 | readinessProbe.timeoutSeconds | int | `3` | Probe timeout (seconds) |

@@ -28,6 +28,8 @@ You can find the list of docker images [here](https://github.com/mr-karan/calert
 docker pull ghcr.io/mr-karan/calert:latest
 ```
 
+`latest` is the default Ubuntu 24.04 image. It includes a shell, CA certificates, and timezone data for production debugging. `latest-scratch` contains the same static binary, certificates, and timezone data in a smaller scratch image, but has no shell or package tools.
+
 #### Custom Message Template
 
 Here's an example `docker-compose` config with a custom `message.tmpl` mounted inside the container:
@@ -84,9 +86,13 @@ Example:
 |  `providers.<room_name>.max_idle_conns` 	| Maximum Keep Alive connections to keep in the pool.  	| yes | `50` |
 |  `providers.<room_name>.timeout` 	| Timeout for making HTTP requests to the webhook URL.  	| yes | `30s` |
 |  `providers.<room_name>.template` 	| Template for rendering a formatted Alert notification.  	| yes | `static/message.tmpl` |
-|  `providers.<room_name>.thread_ttl` 	| Timeout to keep active alerts in memory. Once this TTL expires, a new thread will be created.	| yes | `12h` |
+|  `providers.<room_name>.thread_ttl` 	| Group-state retention period. It does not rotate a recurring GroupKey into a new Chat thread.	| yes | `12h` |
 |  `providers.<room_name>.proxy_url` 	| Specify `proxy_url` as your proxy endpoint to route all HTTP requests to the provider via a proxy. | no | - |
-|  `providers.<room_name>.threaded_replies` 	| Whether to send threaded replies or not. | no | false |
+|  `providers.<room_name>.threaded_replies` 	| Whether to send threaded replies or not. Group mode always threads. | no | false |
+|  `providers.<room_name>.threading_mode` 	| `alert` (default) uses deterministic per-alert lifecycle keys. `group` uses one thread per Alertmanager GroupKey. | no | `alert` |
+|  `providers.<room_name>.dedup_window` 	| Group-mode window for sequential identical payloads after successful delivery. | no | `2m` |
+|  `providers.<room_name>.max_alerts_per_message` 	| Maximum alert sections in a group card. | no | `10` |
+|  `providers.<room_name>.redis.*` 	| Optional Redis address, password, db, and key_prefix for shared group state. | no | - |
 |  `providers.<room_name>.dry_run` 	| In case you're simply experimenting with `calert` config changes and you don't wish to send _actual_ notifications, you can set true. | no | false |
 |  `providers.<room_name>.retry_max` 	| Maximum number of retries | no | `3` |
 |  `providers.<room_name>.retry_wait_min` 	| Minimum time to wait before retrying | no | `1s` |
@@ -113,6 +119,7 @@ Example:
 | `CurrentTime` | Current time (optional timezone) | `{{ CurrentTime "Asia/Kolkata" }}` |
 | `ConvertTZ` | Convert time to timezone | `{{ ConvertTZ .StartsAt "America/New_York" }}` |
 | `DurationSince` | Duration since time | `{{ DurationSince .StartsAt }}` |
+| `json` | JSON-escape a dynamic value before inserting it into CardsV2 JSON | `{{ json .Annotations.description }}` |
 
 ### CardsV2 Support
 
@@ -121,16 +128,16 @@ For rich formatting with colors and structured layouts, use Google Chat's [Cards
 ```
 {{- define "cardsV2" -}}
 {
-  "cardId": "alert-{{ .Fingerprint }}",
+  "cardId": {{ json (printf "alert-%s" .Fingerprint) }},
   "card": {
     "header": {
-      "title": "{{ .Labels.alertname }}",
-      "subtitle": "{{ .Status | Title }}"
+      "title": {{ json .Labels.alertname }},
+      "subtitle": {{ json (.Status | Title) }}
     },
     "sections": [{
       "widgets": [{
         "decoratedText": {
-          "text": "{{ .Annotations.description }}"
+          "text": {{ json .Annotations.description }}
         }
       }]
     }]
@@ -173,11 +180,11 @@ receivers:
 
 ### Understanding repeat_interval
 
-Alertmanager's `repeat_interval` controls how often alerts are re-sent while still firing. When using `calert` with `threaded_replies=true`, repeated alerts will be posted to the same thread (within the `thread_ttl` window). This is **expected behavior** - it ensures your team sees that an alert is still active.
+Alertmanager's `repeat_interval` controls how often alerts are re-sent while still firing. Deterministic thread keys keep the same alert lifecycle in the same thread and do not rotate when `thread_ttl` elapses. In group mode, `thread_ttl` controls only retention of deduplication and resolved-status state.
 
 If you want fewer repeated messages:
 - Increase `repeat_interval` in Alertmanager config
-- Increase `thread_ttl` in calert config to keep alerts in the same thread longer
+- Increase `thread_ttl` in group mode only when deduplication and resolved-status state should be retained longer
 
 ### Kubernetes AlertmanagerConfig
 
@@ -202,10 +209,9 @@ spec:
 
 Alertmanager currently doesn't send any _Unique Identifier_ for each Alert. The use-case of sending related alerts under the same thread is helpful to triage similar alerts and see all their different states (_Firing_, _Resolved_) for people consuming these alerts. `calert` tries to solve this by:
 
-- Use the `fingerprint` field present in the Alert. This field is computed by hashing the labels for an alert.
-- Create a map of `active_alerts` in memory. Add an alert by it's fingerprint and generate a random `UUID.v4` and store that in the map (along with some more meta-data like `startAt` field).
-- Use `?threadKey=uuid` query param while making a request to Google Chat. This ensures that all alerts with same fingerprint (=_same labels_) go under the same thread.
-- A background worker runs _every hour_ which scans the map of `active_alerts`. It checks whether the alert's `startAt` field has crossed the TTL (as specified by `thread_ttl`). If the TTL is expired then the `alert` is removed from the map. This ensures that the map of `active_alerts` doesn't grow unbounded and after a certain TTL all alerts are sent to a new thread.
+- Use the alert `fingerprint` and `startsAt` fields to derive a deterministic thread key.
+- Firing and resolved updates for the same alert lifecycle share a thread across restarts and replicas.
+- A refire with a new `startsAt` receives a new thread key.
 
 ### Group threading (one thread per Alertmanager group)
 

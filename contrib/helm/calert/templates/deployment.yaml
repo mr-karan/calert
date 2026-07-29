@@ -13,16 +13,15 @@ spec:
   template:
     metadata:
       annotations:
-      {{- /*
-        Include checksum/config only if we aren't using an existing secret.
-        https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-      */}}
       {{- if .Values.config.asSecret }}
         {{- if not .Values.config.existingSecret.name }}
         checksum/config: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- end }}
       {{- else }}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      {{- end }}
+      {{- if .Values.templates }}
+        checksum/templates: {{ toJson .Values.templates | sha256sum }}
       {{- end }}
       {{- range $key, $value := .Values.podAnnotations }}
         {{ $key }}: {{ $value | quote }}
@@ -65,17 +64,21 @@ spec:
               value: {{ $value | quote }}
           {{- end }}
         {{- end }}
+        {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+        {{- end }}
           ports:
           - containerPort: {{ .Values.service.port }}
             protocol: TCP
           volumeMounts:
-          - name: config-dir
+          - name: config
             mountPath: /app/config.toml
-            subPath: config.toml
+            subPath: "config.toml"
           {{- range $filename, $_ := .Values.templates }}
-          - name: config-dir
-            mountPath: /app/static/{{ $filename }}
-            subPath: {{ $filename }}
+          - name: templates
+            mountPath: {{ printf "/app/static/%s" $filename | quote }}
+            subPath: {{ $filename | quote }}
           {{- end }}
           livenessProbe:
             httpGet:
@@ -108,17 +111,30 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
-        - name: config-dir
+        - name: config
         {{- if .Values.config.asSecret }}
           secret:
-            secretName: {{ include "calert.configSecretName" . }}
+            secretName: {{ include "calert.configSecretName" . | quote }}
             items:
-              - key: {{ include "calert.configSecretKey" . }}
-                path: config.toml
+              - key: {{ include "calert.configSecretKey" . | quote }}
+                path: "config.toml"
         {{- else }}
           configMap:
             name: {{ template "calert.fullname" . }}-config
+            items:
+              - key: "config.toml"
+                path: "config.toml"
         {{- end }}
+      {{- if .Values.templates }}
+        - name: templates
+          configMap:
+            name: {{ template "calert.fullname" . }}-templates
+            items:
+            {{- range $filename, $_ := .Values.templates }}
+              - key: {{ $filename | quote }}
+                path: {{ $filename | quote }}
+            {{- end }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

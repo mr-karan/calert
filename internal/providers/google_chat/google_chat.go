@@ -2,6 +2,7 @@ package google_chat
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -24,7 +25,6 @@ import (
 type GoogleChatManager struct {
 	lo              *slog.Logger
 	metrics         *metrics.Manager
-	activeAlerts    *ActiveAlerts
 	endpoint        string
 	room            string
 	client          *retryablehttp.Client
@@ -39,8 +39,8 @@ type GoogleChatManager struct {
 }
 
 const (
-	// ThreadingModeAlert is the legacy behaviour: one thread per alert
-	// fingerprint, keyed by a random UUID held in memory.
+	// ThreadingModeAlert is the legacy behaviour: one deterministic thread per
+	// alert lifecycle.
 	ThreadingModeAlert = "alert"
 	// ThreadingModeGroup threads by Alertmanager group: one aggregated
 	// message per webhook payload, posted into a deterministic thread.
@@ -96,7 +96,8 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 	client.RetryWaitMax = opts.RetryWaitMax
 	client.HTTPClient.Timeout = opts.Timeout
 	client.HTTPClient.Transport = transport
-	client.Logger = &slogAdapter{logger: opts.Log}
+	// retryablehttp logs full request URLs, including webhook tokens.
+	client.Logger = nil
 
 	// Custom CheckRetry policy that also retries on 429 (Too Many Requests).
 	// This is important for Google Chat API which rate limits requests.
@@ -114,9 +115,6 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 
 		return false, nil
 	}
-
-	// Initialise the map of active alerts.
-	alerts := make(map[string]AlertDetails, 0)
 
 	// Initialise message template functions.
 	templateFuncMap := template.FuncMap{
@@ -180,7 +178,16 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 			s := int(d.Seconds()) % 60
 			return fmt.Sprintf("%dh %dm %ds", h, m, s)
 		},
+		"json": func(v any) string {
+			encoded, err := json.Marshal(v)
+			if err != nil {
+				return `null`
+			}
+			return string(encoded)
+		},
 	}
+
+	opts.Template = templateForMode(opts.Template, opts.ThreadingMode)
 
 	// Load the template.
 	tmpl, err := template.New(filepath.Base(opts.Template)).Funcs(templateFuncMap).ParseFiles(opts.Template)
@@ -189,16 +196,11 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 	}
 
 	mgr := &GoogleChatManager{
-		lo:       opts.Log,
-		metrics:  opts.Metrics,
-		client:   client,
-		endpoint: opts.Endpoint,
-		room:     opts.Room,
-		activeAlerts: &ActiveAlerts{
-			alerts:  alerts,
-			lo:      opts.Log,
-			metrics: opts.Metrics,
-		},
+		lo:              opts.Log,
+		metrics:         opts.Metrics,
+		client:          client,
+		endpoint:        opts.Endpoint,
+		room:            opts.Room,
 		msgTmpl:         tmpl,
 		dryRun:          opts.DryRun,
 		threadedReplies: opts.ThreadedReplies,
@@ -210,11 +212,23 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 	if mgr.threadingMode == "" {
 		mgr.threadingMode = ThreadingModeAlert
 	}
-	if mgr.threadTTL <= 0 {
+	if mgr.threadTTL < 0 {
+		return nil, fmt.Errorf("thread_ttl must not be negative")
+	}
+	if mgr.threadTTL == 0 {
 		mgr.threadTTL = 12 * time.Hour
+	}
+	if mgr.dedupWindow < 0 {
+		return nil, fmt.Errorf("dedup_window must not be negative")
 	}
 	if mgr.threadingMode != ThreadingModeAlert && mgr.threadingMode != ThreadingModeGroup {
 		return nil, fmt.Errorf("invalid threading_mode %q: must be %q or %q", mgr.threadingMode, ThreadingModeAlert, ThreadingModeGroup)
+	}
+	if mgr.threadingMode == ThreadingModeGroup && mgr.dedupWindow == 0 {
+		mgr.dedupWindow = 2 * time.Minute
+	}
+	if mgr.threadingMode == ThreadingModeGroup && mgr.maxAlertsPerMsg <= 0 {
+		return nil, fmt.Errorf("max_alerts_per_message must be greater than zero in group mode")
 	}
 	// Group mode is threaded by definition (one thread per alert group), so it
 	// ignores threaded_replies. Force it on and tell the operator, rather than
@@ -223,8 +237,9 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 		opts.Log.Warn("threaded_replies is ignored in group threading mode; threading is always on", "room", mgr.room)
 		mgr.threadedReplies = true
 	}
-	// Start a background worker to cleanup alerts based on TTL mechanism.
-	go mgr.activeAlerts.startPruneWorker(1*time.Hour, opts.ThreadTTL)
+	if mgr.threadingMode != ThreadingModeGroup {
+		return mgr, nil
+	}
 
 	// Select the group dedup store. With Redis configured, both calert
 	// instances share state; otherwise state is per-process in memory.
@@ -235,139 +250,110 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 			DB:       opts.RedisDB,
 		})
 		mgr.groupStore = newRedisStore(opts.Log, client, opts.RedisKeyPrefix, mgr.threadTTL)
-		opts.Log.Info("group dedup state shared via redis", "address", opts.RedisAddress, "key_prefix", opts.RedisKeyPrefix)
+		opts.Log.Info("group dedup state shared via redis", "room", opts.Room)
 	} else {
-		mem := newMemoryStore(opts.Log)
-		// Backstop pruner for groups that never report a fully-resolved
-		// payload. Redis uses key TTLs instead, so this is memory-only.
-		go mem.startPruneWorker(1*time.Hour, opts.ThreadTTL)
-		mgr.groupStore = mem
+		mgr.groupStore = newMemoryStore(opts.Log, mgr.threadTTL)
 	}
 
 	return mgr, nil
 }
 
+func templateForMode(path, mode string) string {
+	if mode == ThreadingModeGroup && path == "static/message.tmpl" {
+		return "static/message-group.tmpl"
+	}
+	return path
+}
+
 // Push accepts an Alertmanager webhook payload and dispatches notifications
 // to the Webhook API endpoint, threading either per alert (legacy) or per
 // group depending on the configured threading mode.
-func (m *GoogleChatManager) Push(payload providers.WebhookPayload) error {
+func (m *GoogleChatManager) Push(ctx context.Context, payload providers.WebhookPayload) error {
 	if m.threadingMode == ThreadingModeGroup {
-		return m.pushGroup(payload)
+		return m.pushGroup(ctx, payload)
 	}
-	return m.pushAlerts(payload.Alerts)
+	return m.pushAlerts(ctx, payload.Alerts)
 }
 
 // pushGroup posts one aggregated message per webhook payload into the
 // group's deterministic thread.
-func (m *GoogleChatManager) pushGroup(payload providers.WebhookPayload) error {
-	var (
-		now       = time.Now()
-		threadKey = threadKeyForGroup(payload.GroupKey, now, m.threadTTL)
-		hash      = stateHash(payload.Alerts)
-	)
+func (m *GoogleChatManager) pushGroup(ctx context.Context, payload providers.WebhookPayload) error {
+	now := time.Now()
+	hash := stateHash(payload)
+	threadKey := threadKeyForGroup(m.room, payload.GroupKey)
 
 	m.lo.Info("dispatching group notification to google chat", "group_key", payload.GroupKey, "count", len(payload.Alerts))
 
-	// Drop cluster-race duplicates: same alert states, posted moments ago.
-	prevStatuses, post, err := m.groupStore.shouldPost(payload.GroupKey, hash, statusesOf(payload.Alerts), now, m.dedupWindow)
+	previous, duplicate, err := m.groupStore.inspect(ctx, m.room, payload.GroupKey, hash, now, m.dedupWindow)
 	if err != nil {
-		// Fail open: a dedup-store outage must never drop an alert. Worst
-		// case is the duplicate we already tolerate today.
 		m.lo.Warn("group dedup store unavailable, posting anyway", "error", err, "group_key", payload.GroupKey)
 		m.metrics.Increment(fmt.Sprintf(`group_dedup_store_errors_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
-		prevStatuses, post = nil, true
-	} else if !post {
-		m.lo.Debug("suppressing duplicate group notification", "group_key", payload.GroupKey, "state_hash", hash)
+		previous = groupState{}
+	} else if duplicate {
 		m.metrics.Increment(fmt.Sprintf(`alerts_deduplicated_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
 		return nil
 	}
 
-	tmplCtx := buildGroupContext(payload, threadKey, m.maxAlertsPerMsg, prevStatuses)
-
-	// Nothing new to render: every instance in this payload was already shown
-	// (e.g. an all-resolved re-send after the dedup window, or a payload of
-	// only already-resolved instances re-sent when a new member fires). Skip
-	// so we don't post an empty card. The first firing→resolved transition
-	// still renders, since that instance isn't yet recorded as resolved.
-	if len(tmplCtx.Alerts) == 0 {
-		m.lo.Debug("no new alerts to render for group, skipping", "group_key", payload.GroupKey)
+	tmplCtx := buildGroupContext(payload, threadKey, m.maxAlertsPerMsg, previous.lastStatuses)
+	if len(tmplCtx.Alerts) == 0 && tmplCtx.TruncatedAlerts == 0 {
 		return nil
 	}
 
 	msgs, err := m.prepareMessage(tmplCtx)
 	if err != nil {
-		m.lo.Error("error preparing group message", "error", err)
 		m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_errors_total{provider="%s", room="%s", reason="preparing"}`, m.ID(), m.Room()))
 		return err
 	}
+	if m.dryRun {
+		m.lo.Info("dry_run is enabled for this room. skipping pushing notification", "room", m.Room())
+		return nil
+	}
 
 	for _, msg := range msgs {
-		if m.dryRun {
-			m.lo.Info("dry_run is enabled for this room. skipping pushing notification", "room", m.Room())
-			continue
-		}
-		// threadedReplies is forced true for group mode in the constructor.
-		if err := m.sendMessage(msg, threadKey, m.threadedReplies); err != nil {
+		if err := m.sendMessage(ctx, msg, threadKey, true); err != nil {
 			m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_errors_total{provider="%s", room="%s", reason="sending"}`, m.ID(), m.Room()))
-			m.lo.Error("error sending group message", "error", err)
 			return err
 		}
 	}
-	// Count in alert-units (not payloads) so alerts_dispatched_total keeps the
-	// same meaning as alert mode, and only after a real send so it never
-	// overlaps alerts_deduplicated_total.
+
+	completedAt := time.Now()
+	if err := m.groupStore.commit(ctx, m.room, payload.GroupKey, groupState{
+		lastHash:     hash,
+		lastPost:     completedAt,
+		lastStatuses: statusesOf(payload.Alerts),
+	}); err != nil {
+		m.lo.Warn("saving group dedup state failed after delivery", "error", err, "group_key", payload.GroupKey)
+		m.metrics.Increment(fmt.Sprintf(`group_dedup_store_errors_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
+	}
 	m.metrics.IncrementBy(fmt.Sprintf(`alerts_dispatched_total{provider="%s", room="%s"}`, m.ID(), m.Room()), len(payload.Alerts))
 	m.metrics.Duration(fmt.Sprintf(`alerts_dispatched_duration_seconds{provider="%s", room="%s"}`, m.ID(), m.Room()), now)
-
-	// Group state is intentionally NOT deleted on full resolve: Alertmanager
-	// keeps recently-resolved members in the group and re-sends them when a new
-	// member fires, so we must remember they were already shown to suppress
-	// them. The store's TTL (thread_ttl) is the backstop that forgets the group
-	// once the incident is genuinely over.
 	return nil
 }
 
 // pushAlerts is the legacy per-alert dispatch path.
-func (m *GoogleChatManager) pushAlerts(alerts []alertmgrtmpl.Alert) error {
+func (m *GoogleChatManager) pushAlerts(ctx context.Context, alerts []alertmgrtmpl.Alert) error {
 	m.lo.Info("dispatching alerts to google chat", "count", len(alerts))
-
-	// For each alert, lookup the UUID and send the alert.
-	for _, a := range alerts {
+	for _, alert := range alerts {
 		now := time.Now()
-
-		m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
-
-		// If it's a new alert whose fingerprint isn't in the active alerts map, add it first.
-		if m.activeAlerts.loookup(a.Fingerprint) == "" {
-			m.activeAlerts.add(a)
-		}
-
-		// Prepare a list of messages to send.
-		msgs, err := m.prepareMessage(a)
+		msgs, err := m.prepareMessage(alert)
 		if err != nil {
-			m.lo.Error("error preparing message", "error", err)
 			m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_errors_total{provider="%s", room="%s", reason="preparing"}`, m.ID(), m.Room()))
+			return err
+		}
+		if m.dryRun {
+			m.lo.Info("dry_run is enabled for this room. skipping pushing notification", "room", m.Room())
 			continue
 		}
-
-		// Dispatch an HTTP request for each message.
+		threadKey := threadKeyForAlert(m.room, alert.Fingerprint, alert.StartsAt)
 		for _, msg := range msgs {
-			var threadKey = m.activeAlerts.alerts[a.Fingerprint].UUID.String()
-
-			// Send message to API.
-			if m.dryRun {
-				m.lo.Info("dry_run is enabled for this room. skipping pushing notification", "room", m.Room())
-			} else {
-				if err := m.sendMessage(msg, threadKey, m.threadedReplies); err != nil {
-					m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_errors_total{provider="%s", room="%s", reason="sending"}`, m.ID(), m.Room()))
-					m.lo.Error("error sending message", "error", err)
-					continue
-				}
+			if err := m.sendMessage(ctx, msg, threadKey, m.threadedReplies); err != nil {
+				m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_errors_total{provider="%s", room="%s", reason="sending"}`, m.ID(), m.Room()))
+				return err
 			}
 		}
+		m.metrics.Increment(fmt.Sprintf(`alerts_dispatched_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
 		m.metrics.Duration(fmt.Sprintf(`alerts_dispatched_duration_seconds{provider="%s", room="%s"}`, m.ID(), m.Room()), now)
 	}
-
 	return nil
 }
 

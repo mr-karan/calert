@@ -49,6 +49,14 @@ providers: {}
   #   template: "static/message.tmpl" # Path to message template.
   #   thread_ttl: "12h" # TTL for active alerts in memory.
   #   threaded_replies: false # Send alerts as threaded replies.
+  #   threading_mode: "alert" # Use "group" for one thread per Alertmanager group.
+  #   dedup_window: "2m" # Suppress duplicate group payloads during this window.
+  #   max_alerts_per_message: 10 # Maximum alert sections in a group message.
+  #   redis: # Optional shared Redis state for group threading.
+  #     address: "redis:6379"
+  #     password: ""
+  #     db: 0
+  #     key_prefix: "calert:"
   #   dry_run: false # Enable dry run mode (no actual notifications sent).
   #   retry_max: 3 # Maximum number of retries.
   #   retry_wait_min: "1s" # Minimum wait time between retries.
@@ -99,6 +107,16 @@ args:
 #   env:
 #     TZ: "America/Vancouver"
 env: {}
+
+# -- Environment variable sources passed directly to the container's `envFrom` field.
+# Supports standard `secretRef`, `configMapRef`, and `prefix` entries.
+# Example:
+#   envFrom:
+#     - secretRef:
+#         name: calert-secrets
+#     - configMapRef:
+#         name: calert-env
+envFrom: []
 
 # -- Override the name of the chart
 nameOverride: ""

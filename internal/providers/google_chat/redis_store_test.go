@@ -2,11 +2,10 @@ package google_chat
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"os"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,130 +20,77 @@ func newTestRedisStore(t *testing.T) (*redisStore, *miniredis.Miniredis) {
 	t.Helper()
 	mr := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	lo := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	return newRedisStore(lo, client, "calert", 12*time.Hour), mr
+	return newRedisStore(slog.New(slog.NewJSONHandler(os.Stdout, nil)), client, "calert", 12*time.Hour), mr
 }
 
-func TestRedisStoreShouldPost(t *testing.T) {
-	window := 5 * time.Minute
+func TestRedisStoreCommitsOnlyAfterDelivery(t *testing.T) {
+	store, mr := newTestRedisStore(t)
 	now := time.Now()
 
-	t.Run("first post for a new group: post, no previous statuses", func(t *testing.T) {
-		r, _ := newTestRedisStore(t)
-		prev, post, err := r.shouldPost("g1", "h1", map[string]string{"a": "firing"}, now, window)
-		require.NoError(t, err)
-		assert.True(t, post)
-		assert.Nil(t, prev)
-	})
+	_, duplicate, err := store.inspect(context.Background(), "room", "group", "hash", now, time.Minute)
+	require.NoError(t, err)
+	assert.False(t, duplicate)
+	assert.False(t, mr.Exists(store.key("room", "group")), "inspection must not write state")
 
-	t.Run("identical hash within window: skip", func(t *testing.T) {
-		r, _ := newTestRedisStore(t)
-		_, _, err := r.shouldPost("g1", "h1", nil, now, window)
-		require.NoError(t, err)
-		_, post, err := r.shouldPost("g1", "h1", nil, now.Add(time.Minute), window)
-		require.NoError(t, err)
-		assert.False(t, post)
-	})
+	// A failed render/send has no commit, so a retry is still postable.
+	_, duplicate, err = store.inspect(context.Background(), "room", "group", "hash", now.Add(time.Second), time.Minute)
+	require.NoError(t, err)
+	assert.False(t, duplicate)
 
-	t.Run("identical hash after window: post", func(t *testing.T) {
-		r, _ := newTestRedisStore(t)
-		_, _, err := r.shouldPost("g1", "h1", nil, now, window)
-		require.NoError(t, err)
-		_, post, err := r.shouldPost("g1", "h1", nil, now.Add(window), window)
-		require.NoError(t, err)
-		assert.True(t, post)
-	})
-
-	t.Run("changed hash within window: post", func(t *testing.T) {
-		r, _ := newTestRedisStore(t)
-		_, _, err := r.shouldPost("g1", "h1", nil, now, window)
-		require.NoError(t, err)
-		_, post, err := r.shouldPost("g1", "h2", nil, now.Add(time.Second), window)
-		require.NoError(t, err)
-		assert.True(t, post)
-	})
-
-	t.Run("previous statuses returned on firing -> resolved transition", func(t *testing.T) {
-		r, _ := newTestRedisStore(t)
-		_, _, err := r.shouldPost("g1", "h1", map[string]string{"a": "firing", "b": "resolved"}, now, window)
-		require.NoError(t, err)
-		prev, post, err := r.shouldPost("g1", "h2", map[string]string{"a": "resolved", "b": "resolved"}, now.Add(time.Minute), window)
-		require.NoError(t, err)
-		assert.True(t, post)
-		assert.Equal(t, map[string]string{"a": "firing", "b": "resolved"}, prev)
-	})
-
-	t.Run("delete clears state", func(t *testing.T) {
-		r, _ := newTestRedisStore(t)
-		_, _, err := r.shouldPost("g1", "h1", map[string]string{"a": "resolved"}, now, window)
-		require.NoError(t, err)
-		r.delete("g1")
-		prev, post, err := r.shouldPost("g1", "h1", map[string]string{"a": "resolved"}, now.Add(time.Second), window)
-		require.NoError(t, err)
-		assert.True(t, post)
-		assert.Nil(t, prev)
-	})
-
-	t.Run("write sets a TTL backstop", func(t *testing.T) {
-		r, mr := newTestRedisStore(t)
-		_, _, err := r.shouldPost("g1", "h1", nil, now, window)
-		require.NoError(t, err)
-		assert.Greater(t, mr.TTL(r.key("g1")), time.Duration(0))
-	})
+	require.NoError(t, store.commit(context.Background(), "room", "group", groupState{lastHash: "hash", lastPost: now, lastStatuses: map[string]string{"a": "firing"}}))
+	state, duplicate, err := store.inspect(context.Background(), "room", "group", "hash", now.Add(time.Second), time.Minute)
+	require.NoError(t, err)
+	assert.True(t, duplicate)
+	assert.Equal(t, "firing", state.lastStatuses["a"])
+	assert.Greater(t, mr.TTL(store.key("room", "group")), time.Duration(0))
 }
 
-// TestRedisStoreRace is the regression test for the whole feature: two
-// instances racing on the same group key and hash must yield exactly one
-// post=true. This is why the operation is a single Lua script.
-func TestRedisStoreRace(t *testing.T) {
-	r, _ := newTestRedisStore(t)
-	const n = 50
-	var posts int32
-	var wg sync.WaitGroup
+func TestRedisStoreCommitDoesNotRegressNewerState(t *testing.T) {
+	store, _ := newTestRedisStore(t)
 	now := time.Now()
-	start := make(chan struct{})
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			<-start
-			_, post, err := r.shouldPost("g1", "h1", nil, now, 5*time.Minute)
-			require.NoError(t, err)
-			if post {
-				atomic.AddInt32(&posts, 1)
-			}
-		}()
-	}
-	close(start)
-	wg.Wait()
-	assert.Equal(t, int32(1), posts, "exactly one racer must win the post")
+	newer := groupState{lastHash: "new", lastPost: now.Add(200 * time.Nanosecond), lastStatuses: map[string]string{"a": "resolved"}}
+	older := groupState{lastHash: "old", lastPost: now.Add(100 * time.Nanosecond), lastStatuses: map[string]string{"a": "firing"}}
+
+	require.NoError(t, store.commit(context.Background(), "room", "group", newer))
+	require.NoError(t, store.commit(context.Background(), "room", "group", older))
+	state, _, err := store.inspect(context.Background(), "room", "group", "new", now.Add(time.Second), 5*time.Minute)
+	require.NoError(t, err)
+	assert.Equal(t, "new", state.lastHash)
+	assert.Equal(t, "resolved", state.lastStatuses["a"])
 }
 
-// TestGroupModeFailOpen: with an unreachable Redis endpoint, the dispatcher
-// posts anyway and the fallback metric increments — a Redis outage degrades
-// dedup, never drops an alert.
+func TestRedisStoreKeysAreRoomScopedAndBounded(t *testing.T) {
+	store, _ := newTestRedisStore(t)
+	group := `{}:{alertname="sensitive / very long group key"}`
+	key := store.key("room-a", group)
+	assert.NotContains(t, key, group)
+	assert.NotEqual(t, key, store.key("room-b", group))
+	assert.Regexp(t, `^calert:group:[a-f0-9]{64}$`, key)
+}
+
 func TestGroupModeFailOpen(t *testing.T) {
 	srv := newCapturingServer()
 	defer srv.Close()
 
 	mx := metrics.New("calert")
 	chat, err := NewGoogleChat(GoogleChatOpts{
-		Log:           slog.New(slog.NewJSONHandler(os.Stdout, nil)),
-		Metrics:       mx,
-		Endpoint:      srv.URL,
-		Room:          "test",
-		Template:      "../../../static/message-group.tmpl",
-		ThreadingMode: ThreadingModeGroup,
-		ThreadTTL:     12 * time.Hour,
-		DedupWindow:   5 * time.Minute,
-		RedisAddress:  "127.0.0.1:1", // nothing listening
+		Log:             slog.New(slog.NewJSONHandler(os.Stdout, nil)),
+		Metrics:         mx,
+		Endpoint:        srv.URL,
+		Room:            "test",
+		Template:        "../../../static/message-group.tmpl",
+		ThreadingMode:   ThreadingModeGroup,
+		ThreadTTL:       12 * time.Hour,
+		DedupWindow:     5 * time.Minute,
+		MaxAlertsPerMsg: 10,
+		RedisAddress:    "127.0.0.1:1",
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, chat.Push(groupPayload(groupAlert("a", "firing", "node1"))))
-	assert.Len(t, srv.keys(), 1, "alert must be posted despite redis being down")
+	require.NoError(t, chat.Push(context.Background(), groupPayload(groupAlert("a", "firing", "node1"))))
+	assert.Len(t, srv.keys(), 1)
 
 	var buf bytes.Buffer
 	mx.FlushMetrics(&buf)
-	assert.True(t, strings.Contains(buf.String(), `group_dedup_store_errors_total`), "fallback metric must increment")
+	assert.Contains(t, strings.TrimSpace(buf.String()), "group_dedup_store_errors_total")
 }

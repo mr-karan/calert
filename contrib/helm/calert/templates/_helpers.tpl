@@ -67,10 +67,28 @@ proxy_url = {{ $value.proxy_url | default "" | quote }}
 template = {{ $value.template | default "static/message.tmpl" | quote }}
 thread_ttl = {{ $value.thread_ttl | default "12h" | quote }}
 threaded_replies = {{ $value.threaded_replies | default false }}
+threading_mode = {{ $value.threading_mode | default "alert" | quote }}
+dedup_window = {{ $value.dedup_window | default "2m" | quote }}
+max_alerts_per_message = {{ $value.max_alerts_per_message | default 10 }}
 dry_run = {{ $value.dry_run | default false }}
 retry_max = {{ $value.retry_max | default 3 }}
 retry_wait_min = {{ $value.retry_wait_min | default "1s" | quote }}
 retry_wait_max = {{ $value.retry_wait_max | default "5s" | quote }}
+{{- with $value.redis }}
+[providers.{{ $key }}.redis]
+{{- if hasKey . "address" }}
+address = {{ .address | quote }}
+{{- end }}
+{{- if hasKey . "password" }}
+password = {{ .password | quote }}
+{{- end }}
+{{- if hasKey . "db" }}
+db = {{ .db }}
+{{- end }}
+{{- if hasKey . "key_prefix" }}
+key_prefix = {{ .key_prefix | quote }}
+{{- end }}
+{{- end }}
 {{- end }}
 {{- end -}}
 

@@ -1,166 +1,106 @@
 package google_chat
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/mr-karan/calert/internal/providers"
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestThreadKeyForGroup(t *testing.T) {
-	var (
-		ttl  = 12 * time.Hour
-		base = time.Date(2026, 6, 12, 10, 0, 0, 0, time.UTC)
-	)
+func TestThreadKeysAreDeterministicAndScoped(t *testing.T) {
+	group := `{}:{alertname="Foo"}`
+	assert.Equal(t, threadKeyForGroup("room-a", group), threadKeyForGroup("room-a", group))
+	assert.NotEqual(t, threadKeyForGroup("room-a", group), threadKeyForGroup("room-b", group))
+	assert.NotEqual(t, threadKeyForGroup("room-a", group), threadKeyForGroup("room-a", "other"))
 
-	t.Run("two instances compute the same key for the same payload", func(t *testing.T) {
-		// Simulates the two calert instances receiving the same group a
-		// few seconds apart.
-		k1 := threadKeyForGroup(`{}/{}:{alertname="Foo"}`, base, ttl)
-		k2 := threadKeyForGroup(`{}/{}:{alertname="Foo"}`, base.Add(30*time.Second), ttl)
-		assert.Equal(t, k1, k2)
-	})
-
-	t.Run("different groups get different keys", func(t *testing.T) {
-		k1 := threadKeyForGroup(`{}/{}:{alertname="Foo"}`, base, ttl)
-		k2 := threadKeyForGroup(`{}/{}:{alertname="Bar"}`, base, ttl)
-		assert.NotEqual(t, k1, k2)
-	})
-
-	t.Run("key rolls over at the bucket boundary", func(t *testing.T) {
-		boundary := time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC) // 12:00 UTC bucket edge
-		k1 := threadKeyForGroup("g", boundary.Add(-time.Second), ttl)
-		k2 := threadKeyForGroup("g", boundary, ttl)
-		assert.NotEqual(t, k1, k2)
-
-		// Within the same bucket, key is stable.
-		k3 := threadKeyForGroup("g", boundary.Add(11*time.Hour), ttl)
-		assert.Equal(t, k2, k3)
-	})
+	startsAt := time.Date(2026, 6, 12, 10, 0, 0, 0, time.UTC)
+	assert.Equal(t, threadKeyForAlert("room-a", "fingerprint", startsAt), threadKeyForAlert("room-a", "fingerprint", startsAt))
+	assert.NotEqual(t, threadKeyForAlert("room-a", "fingerprint", startsAt), threadKeyForAlert("room-a", "fingerprint", startsAt.Add(time.Minute)))
+	assert.NotEqual(t, threadKeyForAlert("room-a", "fingerprint", startsAt), threadKeyForAlert("room-b", "fingerprint", startsAt))
 }
 
-func TestStateHash(t *testing.T) {
-	alert := func(fp, status string, ts time.Time) alertmgrtmpl.Alert {
+func TestStateHashIncludesContentAndIgnoresOrder(t *testing.T) {
+	alert := func(fp, summary string) alertmgrtmpl.Alert {
 		return alertmgrtmpl.Alert{
 			Fingerprint: fp,
-			Status:      status,
-			StartsAt:    ts,
-			Annotations: alertmgrtmpl.KV{"summary": ts.String()},
+			Status:      "firing",
+			Labels:      alertmgrtmpl.KV{"instance": fp, "severity": "warning"},
+			Annotations: alertmgrtmpl.KV{"summary": summary},
 		}
 	}
+
+	first := providers.WebhookPayload{GroupKey: "group", TruncatedAlerts: 1, Data: alertmgrtmpl.Data{Status: "firing", GroupLabels: alertmgrtmpl.KV{"alertname": "test"}, CommonLabels: alertmgrtmpl.KV{"severity": "warning"}, Alerts: []alertmgrtmpl.Alert{alert("a", "first"), alert("b", "second")}}}
+	reordered := first
+	reordered.Alerts = []alertmgrtmpl.Alert{first.Alerts[1], first.Alerts[0]}
+	assert.Equal(t, stateHash(first), stateHash(reordered))
+	changed := first
+	changed.Alerts = []alertmgrtmpl.Alert{alert("a", "changed"), alert("b", "second")}
+	assert.NotEqual(t, stateHash(first), stateHash(changed))
+	changed = first
+	changed.TruncatedAlerts++
+	assert.NotEqual(t, stateHash(first), stateHash(changed))
+	changed = first
+	changed.Status = "resolved"
+	assert.NotEqual(t, stateHash(first), stateHash(changed))
+	changed = first
+	changed.GroupKey = "other-group"
+	assert.NotEqual(t, stateHash(first), stateHash(changed))
+	changed = first
+	changed.CommonLabels = alertmgrtmpl.KV{"severity": "critical"}
+	assert.NotEqual(t, stateHash(first), stateHash(changed))
+}
+
+func TestMemoryStoreCommitDoesNotRegressNewerState(t *testing.T) {
+	store := newMemoryStore(slog.New(slog.NewJSONHandler(os.Stdout, nil)), time.Hour)
+	now := time.Now()
+	newer := groupState{lastHash: "new", lastPost: now.Add(time.Minute), lastStatuses: map[string]string{"a": "resolved"}}
+	older := groupState{lastHash: "old", lastPost: now, lastStatuses: map[string]string{"a": "firing"}}
+
+	require.NoError(t, store.commit(context.Background(), "room", "group", newer))
+	require.NoError(t, store.commit(context.Background(), "room", "group", older))
+	state, _, err := store.inspect(context.Background(), "room", "group", "new", now.Add(2*time.Minute), 5*time.Minute)
+	require.NoError(t, err)
+	assert.Equal(t, "new", state.lastHash)
+	assert.Equal(t, "resolved", state.lastStatuses["a"])
+}
+
+func TestMemoryStoreExpiresStateLazilyAtTTL(t *testing.T) {
+	store := newMemoryStore(slog.New(slog.NewJSONHandler(os.Stdout, nil)), time.Minute)
+	now := time.Now()
+	require.NoError(t, store.commit(context.Background(), "room", "group", groupState{lastHash: "hash", lastPost: now}))
+	state, duplicate, err := store.inspect(context.Background(), "room", "group", "hash", now.Add(time.Minute), time.Minute)
+	require.NoError(t, err)
+	assert.False(t, duplicate)
+	assert.Zero(t, state.lastPost)
+}
+
+func TestMemoryStoreCommitsOnlyAfterDelivery(t *testing.T) {
+	store := newMemoryStore(slog.New(slog.NewJSONHandler(os.Stdout, nil)), time.Hour)
 	now := time.Now()
 
-	t.Run("insensitive to timestamps and annotations", func(t *testing.T) {
-		h1 := stateHash([]alertmgrtmpl.Alert{alert("a", "firing", now)})
-		h2 := stateHash([]alertmgrtmpl.Alert{alert("a", "firing", now.Add(time.Minute))})
-		assert.Equal(t, h1, h2)
-	})
+	state, duplicate, err := store.inspect(context.Background(), "room", "group", "hash", now, time.Minute)
+	require.NoError(t, err)
+	assert.False(t, duplicate)
+	assert.Zero(t, state.lastPost)
 
-	t.Run("insensitive to alert ordering", func(t *testing.T) {
-		h1 := stateHash([]alertmgrtmpl.Alert{alert("a", "firing", now), alert("b", "resolved", now)})
-		h2 := stateHash([]alertmgrtmpl.Alert{alert("b", "resolved", now), alert("a", "firing", now)})
-		assert.Equal(t, h1, h2)
-	})
+	// A failed render/send has no commit, so a retry remains postable.
+	_, duplicate, err = store.inspect(context.Background(), "room", "group", "hash", now.Add(time.Second), time.Minute)
+	require.NoError(t, err)
+	assert.False(t, duplicate)
 
-	t.Run("sensitive to status flips", func(t *testing.T) {
-		h1 := stateHash([]alertmgrtmpl.Alert{alert("a", "firing", now)})
-		h2 := stateHash([]alertmgrtmpl.Alert{alert("a", "resolved", now)})
-		assert.NotEqual(t, h1, h2)
-	})
+	require.NoError(t, store.commit(context.Background(), "room", "group", groupState{lastHash: "hash", lastPost: now, lastStatuses: map[string]string{"a": "firing"}}))
+	state, duplicate, err = store.inspect(context.Background(), "room", "group", "hash", now.Add(time.Second), time.Minute)
+	require.NoError(t, err)
+	assert.True(t, duplicate)
+	assert.Equal(t, "firing", state.lastStatuses["a"])
 
-	t.Run("sensitive to instance set changes", func(t *testing.T) {
-		h1 := stateHash([]alertmgrtmpl.Alert{alert("a", "firing", now)})
-		h2 := stateHash([]alertmgrtmpl.Alert{alert("a", "firing", now), alert("b", "firing", now)})
-		assert.NotEqual(t, h1, h2)
-	})
-}
-
-func TestGroupStatesDedup(t *testing.T) {
-	var (
-		lo     = slog.New(slog.NewJSONHandler(os.Stdout, nil))
-		now    = time.Now()
-		window = 5 * time.Minute
-	)
-
-	// post reduces shouldPost to its dedup decision for tests that don't
-	// care about the previous statuses.
-	post := func(g *memoryStore, key, hash string, ts time.Time) bool {
-		_, ok, _ := g.shouldPost(key, hash, nil, ts, window)
-		return ok
-	}
-
-	t.Run("suppresses identical hash within window", func(t *testing.T) {
-		g := newMemoryStore(lo)
-		assert.True(t, post(g, "g1", "h1", now))
-		assert.False(t, post(g, "g1", "h1", now.Add(time.Minute)))
-	})
-
-	t.Run("allows identical hash after window", func(t *testing.T) {
-		g := newMemoryStore(lo)
-		assert.True(t, post(g, "g1", "h1", now))
-		assert.True(t, post(g, "g1", "h1", now.Add(window)))
-	})
-
-	t.Run("allows different hash within window", func(t *testing.T) {
-		g := newMemoryStore(lo)
-		assert.True(t, post(g, "g1", "h1", now))
-		assert.True(t, post(g, "g1", "h2", now.Add(time.Second)))
-	})
-
-	t.Run("groups are independent", func(t *testing.T) {
-		g := newMemoryStore(lo)
-		assert.True(t, post(g, "g1", "h1", now))
-		assert.True(t, post(g, "g2", "h1", now))
-	})
-
-	t.Run("delete resets the dedup state", func(t *testing.T) {
-		g := newMemoryStore(lo)
-		assert.True(t, post(g, "g1", "h1", now))
-		g.delete("g1")
-		assert.True(t, post(g, "g1", "h1", now.Add(time.Second)))
-	})
-
-	t.Run("prune removes stale groups only", func(t *testing.T) {
-		g := newMemoryStore(lo)
-		post(g, "stale", "h1", now.Add(-13*time.Hour))
-		post(g, "fresh", "h1", now)
-		g.prune(now, 12*time.Hour)
-		assert.False(t, post(g, "fresh", "h1", now.Add(time.Second)))
-		assert.True(t, post(g, "stale", "h1", now.Add(time.Second)))
-	})
-}
-
-func TestGroupStatesPreviousStatuses(t *testing.T) {
-	var (
-		lo     = slog.New(slog.NewJSONHandler(os.Stdout, nil))
-		now    = time.Now()
-		window = 5 * time.Minute
-	)
-
-	t.Run("first post has no previous statuses", func(t *testing.T) {
-		g := newMemoryStore(lo)
-		prev, ok, _ := g.shouldPost("g1", "h1", map[string]string{"a": "firing"}, now, window)
-		assert.True(t, ok)
-		assert.Nil(t, prev)
-	})
-
-	t.Run("subsequent post returns the previously recorded statuses", func(t *testing.T) {
-		g := newMemoryStore(lo)
-		g.shouldPost("g1", "h1", map[string]string{"a": "firing", "b": "resolved"}, now, window)
-		prev, ok, _ := g.shouldPost("g1", "h2", map[string]string{"a": "resolved", "b": "resolved"}, now.Add(time.Minute), window)
-		assert.True(t, ok)
-		assert.Equal(t, map[string]string{"a": "firing", "b": "resolved"}, prev)
-	})
-
-	t.Run("delete forgets statuses, restart amnesia is benign", func(t *testing.T) {
-		g := newMemoryStore(lo)
-		g.shouldPost("g1", "h1", map[string]string{"a": "resolved"}, now, window)
-		g.delete("g1")
-		prev, ok, _ := g.shouldPost("g1", "h2", map[string]string{"a": "resolved"}, now.Add(time.Minute), window)
-		assert.True(t, ok)
-		assert.Nil(t, prev)
-	})
+	_, duplicate, err = store.inspect(context.Background(), "other-room", "group", "hash", now.Add(time.Second), time.Minute)
+	require.NoError(t, err)
+	assert.False(t, duplicate, "room scope must isolate group state")
 }

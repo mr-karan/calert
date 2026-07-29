@@ -19,16 +19,17 @@ type GroupOverflow struct {
 // GroupTemplateContext is the template contract for group threading mode:
 // one aggregated context per Alertmanager webhook payload.
 type GroupTemplateContext struct {
-	AlertName     string
-	Status        string
-	Labels        alertmgrtmpl.KV
-	FiringCount   int
-	ResolvedCount int
-	Alerts        []alertmgrtmpl.Alert
-	Overflow      GroupOverflow
-	TrackingKey   string
-	GeneratorURL  string
-	Annotations   alertmgrtmpl.KV
+	AlertName       string
+	Status          string
+	Labels          alertmgrtmpl.KV
+	FiringCount     int
+	ResolvedCount   int
+	Alerts          []alertmgrtmpl.Alert
+	Overflow        GroupOverflow
+	TruncatedAlerts uint64
+	TrackingKey     string
+	GeneratorURL    string
+	Annotations     alertmgrtmpl.KV
 }
 
 // buildGroupContext converts a webhook payload into a group template context:
@@ -44,9 +45,10 @@ type GroupTemplateContext struct {
 // rendered set (plus overflow), so hidden instances are not counted.
 func buildGroupContext(payload providers.WebhookPayload, trackingKey string, maxAlerts int, prevStatuses map[string]string) GroupTemplateContext {
 	ctx := GroupTemplateContext{
-		AlertName:   payload.GroupLabels["alertname"],
-		Status:      payload.Status,
-		TrackingKey: trackingKey,
+		AlertName:       payload.GroupLabels["alertname"],
+		Status:          payload.Status,
+		TruncatedAlerts: payload.TruncatedAlerts,
+		TrackingKey:     trackingKey,
 	}
 
 	// Copy CommonLabels so the severity fallback never mutates the payload.
