@@ -19,101 +19,54 @@ builds:
     dir: ./cmd/
 
 archives:
-  - format: tar.gz
+  - formats:
+      - tar.gz
     files:
       - README.md
       - LICENSE
       - config.sample.toml
       - static/
 
-dockers:
-  - # ID of the image, needed if you want to filter by it later on (e.g. on custom publishers).
-    id: calert-amd64
-
-    # GOOS of the built binaries/packages that should be used.
-    goos: linux
-
-    # GOARCH of the built binaries/packages that should be used.
-    goarch: amd64
-
-    # IDs to filter the binaries/packages.
+dockers_v2:
+  - id: calert
     ids:
       - calert
-
-    # Templates of the Docker image names.
-    image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest-amd64"
-
-    # Skips the docker push.
-    # Could be useful if you also do draft releases.
-    #
-    # If set to auto, the release will not be pushed to the Docker repository
-    #  in case there is an indicator of a prerelease in the tag, e.g. v1.0.0-rc1.
-    #
-    # Defaults to false.
-    skip_push: false
-
-    # Path to the Dockerfile (from the project root).
     dockerfile: Dockerfile
-
-    # Set the "backend" for the Docker pipe.
-    # Valid options are: docker, buildx, podman, buildpacks
-    # podman is a GoReleaser Pro feature and is only available on Linux.
-    # Defaults to docker.
-    use: docker
-
-    # Template of the docker build flags.
-    build_flag_templates:
-      - "--pull"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--platform=linux/amd64"
-
-    # If your Dockerfile copies files other than binaries and packages,
-    # you should list them here as well.
-    # Note that GoReleaser will create the same structure inside a temporary
-    # folder, so if you add `foo/bar.json` here, on your Dockerfile you can
-    # `COPY foo/bar.json /whatever.json`.
-    # Also note that the paths here are relative to the folder in which
-    # GoReleaser is being run (usually the repository root folder).
-    # This field does not support wildcards, you can add an entire folder here
-    # and use wildcards when you `COPY`/`ADD` in your Dockerfile.
+    images:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}"
+    tags:
+      - "{{ .Tag }}"
+      - latest
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    flags: ["--pull"]
+    labels:
+      org.opencontainers.image.created: "{{ .Date }}"
+      org.opencontainers.image.title: "{{ .ProjectName }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.version: "{{ .Version }}"
     extra_files:
       - config.sample.toml
       - static/
-  - # Make an additional template for arm64
-    id: calert-arm64
-    goos: linux
-    goarch: arm64
+  - id: calert-scratch
     ids:
       - calert
-    image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}-arm64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest-arm64"
-    skip_push: false
-    dockerfile: Dockerfile
-    use: docker
-    build_flag_templates:
-      - "--pull"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--platform=linux/arm64"
+    dockerfile: Dockerfile.scratch
+    images:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}"
+    tags:
+      - "{{ .Tag }}-scratch"
+      - latest-scratch
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    flags: ["--pull"]
+    labels:
+      org.opencontainers.image.created: "{{ .Date }}"
+      org.opencontainers.image.title: "{{ .ProjectName }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.version: "{{ .Version }}"
     extra_files:
       - config.sample.toml
       - static/
-
-# Make a manifest with both architectures
-docker_manifests:
-  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}"
-    image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}-arm64"
-  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:latest"
-    image_templates:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}-amd64"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}:{{ .Tag }}-arm64"

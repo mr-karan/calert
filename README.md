@@ -28,6 +28,8 @@ You can find the list of docker images [here](https://github.com/mr-karan/calert
 docker pull ghcr.io/mr-karan/calert:latest
 ```
 
+`latest` is the default Ubuntu 24.04 image. It includes a shell, CA certificates, and timezone data for production debugging. `latest-scratch` contains the same static binary, certificates, and timezone data in a smaller scratch image, but has no shell or package tools.
+
 #### Custom Message Template
 
 Here's an example `docker-compose` config with a custom `message.tmpl` mounted inside the container:
