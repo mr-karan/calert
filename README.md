@@ -224,6 +224,10 @@ Here's a list of internal app metrics available at `/metrics`:
 
 It also exposes Go process metrics in addition to app metrics, which you can use to monitor the performance of `calert`.
 
+## Health endpoint
+
+`calert` exposes an health endpoint at `/ping`.
+
 ## Migrating from v1 to v2
 
 A few notes on `v2` migration:
