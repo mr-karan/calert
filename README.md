@@ -207,6 +207,10 @@ Alertmanager currently doesn't send any _Unique Identifier_ for each Alert. The 
 - Use `?threadKey=uuid` query param while making a request to Google Chat. This ensures that all alerts with same fingerprint (=_same labels_) go under the same thread.
 - A background worker runs _every hour_ which scans the map of `active_alerts`. It checks whether the alert's `startAt` field has crossed the TTL (as specified by `thread_ttl`). If the TTL is expired then the `alert` is removed from the map. This ensures that the map of `active_alerts` doesn't grow unbounded and after a certain TTL all alerts are sent to a new thread.
 
+### Group threading (one thread per Alertmanager group)
+
+The above is per-alert threading (`threading_mode = "alert"`, the default). `calert` also supports threading one whole Alertmanager **group** into a single thread with an aggregated message, and sharing dedup state across active-active instances via Redis. See [docs/group-threading.md](docs/group-threading.md) for setup.
+
 ## Prometheus Metrics
 
 `calert` exposes various metrics in the Prometheus exposition format.

@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"strings"
 
-	alertmgrtmpl "github.com/prometheus/alertmanager/template"
 	chatv1 "google.golang.org/api/chat/v1"
 )
 
@@ -17,10 +16,11 @@ const (
 	maxMsgSize = 4096
 )
 
-// prepareMessage accepts an Alert object and templates out with the user provided template.
-// It also splits the alerts if the combined size exceeds the limit of 4096 bytes by
-// G-Chat Webhook API
-func (m *GoogleChatManager) prepareMessage(alert alertmgrtmpl.Alert) ([]chatv1.Message, error) {
+// prepareMessage accepts a template context (a single Alert in legacy mode,
+// a GroupTemplateContext in group mode) and templates out with the user
+// provided template. It also splits the alerts if the combined size exceeds
+// the limit of 4096 bytes by G-Chat Webhook API
+func (m *GoogleChatManager) prepareMessage(alert any) ([]chatv1.Message, error) {
 	var (
 		str    strings.Builder
 		toText bytes.Buffer
@@ -75,7 +75,7 @@ func (m *GoogleChatManager) prepareMessage(alert alertmgrtmpl.Alert) ([]chatv1.M
 }
 
 // sendMessage pushes out a notification to Google Chat space.
-func (m *GoogleChatManager) sendMessage(msg chatv1.Message, threadKey string) error {
+func (m *GoogleChatManager) sendMessage(msg chatv1.Message, threadKey string, threaded bool) error {
 	out, err := json.Marshal(msg)
 	if err != nil {
 		return err
@@ -89,7 +89,7 @@ func (m *GoogleChatManager) sendMessage(msg chatv1.Message, threadKey string) er
 	q := u.Query()
 	// Default behaviour is to start a new thread for every alert.
 	q.Set("messageReplyOption", "MESSAGE_REPLY_OPTION_UNSPECIFIED")
-	if m.threadedReplies {
+	if threaded {
 		// If threaded replies are enabled, use the threadKey to reply to the same thread.
 		q.Set("messageReplyOption", "REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD")
 		q.Set("threadKey", threadKey)

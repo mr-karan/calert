@@ -86,16 +86,19 @@ func initConfig(cfgDefault string, envPrefix string) (*koanf.Koanf, error) {
 func initProviders(ko *koanf.Koanf, lo *slog.Logger, metrics *metrics.Manager) ([]prvs.Provider, error) {
 	provs := make([]prvs.Provider, 0)
 	provDefOpts := map[string]interface{}{
-		"type":             "google_chat",
-		"max_idle_conns":   50,
-		"timeout":          "30s",
-		"template":         "static/message.tmpl",
-		"thread_ttl":       "12h",
-		"threaded_replies": false,
-		"dry_run":          false,
-		"retry_max":        3,
-		"retry_wait_min":   "1s",
-		"retry_wait_max":   "5s",
+		"type":                   "google_chat",
+		"max_idle_conns":         50,
+		"timeout":                "30s",
+		"template":               "static/message.tmpl",
+		"thread_ttl":             "12h",
+		"threaded_replies":       false,
+		"threading_mode":         "alert",
+		"dedup_window":           "2m",
+		"max_alerts_per_message": 10,
+		"dry_run":                false,
+		"retry_max":              3,
+		"retry_wait_min":         "1s",
+		"retry_wait_max":         "5s",
 	}
 
 	// Loop over all providers listed in config.
@@ -122,11 +125,18 @@ func initProviders(ko *koanf.Koanf, lo *slog.Logger, metrics *metrics.Manager) (
 				Template:        ko.MustString(fmt.Sprintf("%s.template", cfgKey)),
 				ThreadTTL:       ko.MustDuration(fmt.Sprintf("%s.thread_ttl", cfgKey)),
 				ThreadedReplies: ko.Bool(fmt.Sprintf("%s.threaded_replies", cfgKey)),
+				ThreadingMode:   ko.String(fmt.Sprintf("%s.threading_mode", cfgKey)),
+				DedupWindow:     ko.Duration(fmt.Sprintf("%s.dedup_window", cfgKey)),
+				MaxAlertsPerMsg: ko.Int(fmt.Sprintf("%s.max_alerts_per_message", cfgKey)),
 				Metrics:         metrics,
 				DryRun:          ko.Bool(fmt.Sprintf("%s.dry_run", cfgKey)),
 				RetryMax:        ko.Int(fmt.Sprintf("%s.retry_max", cfgKey)),
 				RetryWaitMin:    ko.Duration(fmt.Sprintf("%s.retry_wait_min", cfgKey)),
 				RetryWaitMax:    ko.Duration(fmt.Sprintf("%s.retry_wait_max", cfgKey)),
+				RedisAddress:    ko.String(fmt.Sprintf("%s.redis.address", cfgKey)),
+				RedisPassword:   ko.String(fmt.Sprintf("%s.redis.password", cfgKey)),
+				RedisDB:         ko.Int(fmt.Sprintf("%s.redis.db", cfgKey)),
+				RedisKeyPrefix:  ko.String(fmt.Sprintf("%s.redis.key_prefix", cfgKey)),
 			}
 			lo.Debug("provider options", "type", provType, "options", opts)
 

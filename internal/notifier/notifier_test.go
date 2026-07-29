@@ -27,8 +27,8 @@ func (m *mockProvider) Room() string {
 	return m.room
 }
 
-func (m *mockProvider) Push(alerts []alertmgrtmpl.Alert) error {
-	m.pushed = alerts
+func (m *mockProvider) Push(payload providers.WebhookPayload) error {
+	m.pushed = payload.Alerts
 	return m.pushErr
 }
 
@@ -86,12 +86,12 @@ func TestDispatch(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		alerts := []alertmgrtmpl.Alert{
+		payload := providers.WebhookPayload{Data: alertmgrtmpl.Data{Alerts: []alertmgrtmpl.Alert{
 			{Fingerprint: "alert1"},
 			{Fingerprint: "alert2"},
-		}
+		}}}
 
-		err = notif.Dispatch(alerts, "test-room")
+		err = notif.Dispatch(payload, "test-room")
 		require.NoError(t, err)
 
 		assert.Len(t, prov.pushed, 2)
@@ -108,7 +108,7 @@ func TestDispatch(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		err = notif.Dispatch([]alertmgrtmpl.Alert{}, "unknown-room")
+		err = notif.Dispatch(providers.WebhookPayload{}, "unknown-room")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "no provider configured for room: unknown-room")
 		assert.Contains(t, err.Error(), "test-room")
@@ -123,7 +123,7 @@ func TestDispatch(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		err = notif.Dispatch([]alertmgrtmpl.Alert{}, "cattle-monitoring-system/alertas/alertas")
+		err = notif.Dispatch(providers.WebhookPayload{}, "cattle-monitoring-system/alertas/alertas")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "room_name=")
 		assert.Contains(t, err.Error(), "Kubernetes")
@@ -139,8 +139,8 @@ func TestDispatch(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		alertsRoom1 := []alertmgrtmpl.Alert{{Fingerprint: "alert-room1"}}
-		alertsRoom2 := []alertmgrtmpl.Alert{{Fingerprint: "alert-room2"}}
+		alertsRoom1 := providers.WebhookPayload{Data: alertmgrtmpl.Data{Alerts: []alertmgrtmpl.Alert{{Fingerprint: "alert-room1"}}}}
+		alertsRoom2 := providers.WebhookPayload{Data: alertmgrtmpl.Data{Alerts: []alertmgrtmpl.Alert{{Fingerprint: "alert-room2"}}}}
 
 		err = notif.Dispatch(alertsRoom1, "room1")
 		require.NoError(t, err)

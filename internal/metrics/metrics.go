@@ -33,6 +33,12 @@ func (s *Manager) Increment(label string) {
 	s.metrics.GetOrCreateCounter(s.getFormattedLabel(label)).Inc()
 }
 
+// IncrementBy adds n to the counter for the corresponding key.
+// This is used for Counter metric type.
+func (s *Manager) IncrementBy(label string, n int) {
+	s.metrics.GetOrCreateCounter(s.getFormattedLabel(label)).Add(n)
+}
+
 // Decrement the counter for the corresponding key.
 // This is used for Counter metric type.
 func (s *Manager) Decrement(label string) {

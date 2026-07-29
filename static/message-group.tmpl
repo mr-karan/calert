@@ -1,0 +1,54 @@
+{{ .AlertName }} - {{ .Status | Title }} ({{ .FiringCount }} firing / {{ .ResolvedCount }} resolved)
+{{- define "cardsV2" -}}
+{
+  "cardId": "{{ .TrackingKey }}",
+  "card": {
+    "header": {
+      "title": "{{ if eq .Status "resolved" }}🟢{{ else if eq .Labels.severity "critical" }}🔴{{ else if eq .Labels.severity "critical-daytime" }}🟣{{ else if eq .Labels.severity "warning" }}🟡{{ else }}🔵{{ end }} {{ .AlertName }}",
+      "subtitle": "{{ .FiringCount }} firing / {{ .ResolvedCount }} resolved"
+    },
+    "sections": [
+      {
+        "widgets": [
+          {
+            "buttonList": {
+              "buttons": [
+                {{- if .GeneratorURL -}}
+                { "text": "Prometheus", "onClick": { "openLink": { "url": "{{ .GeneratorURL }}" } } }
+                {{- end -}}
+                {{- if .Annotations.runbook_url -}}
+                {{- if .GeneratorURL }},{{ end -}}
+                { "text": "Handbook", "onClick": { "openLink": { "url": "{{ .Annotations.runbook_url }}" } } }
+                {{- end -}}
+              ]
+            }
+          }
+        ]
+      }
+      {{- range .Alerts -}},
+      {
+        "header": "{{ if eq .Status "firing" }}🔥 FIRING{{ else }}✅ RESOLVED{{ end }} — {{ .Labels.instance | Default .Fingerprint }}",
+        "collapsible": true,
+        "uncollapsibleWidgetsCount": 1,
+        "widgets": [
+          { "decoratedText": { "text": "<b>{{ .Status | toUpper }}</b> since {{ .StartsAt.UTC.Format "2006-01-02 15:04 MST" }}" } }
+          {{- range .Labels.SortedPairs -}},
+          { "decoratedText": { "topLabel": "{{ .Name }}", "text": "{{ .Value }}" } }
+          {{- end -}}
+          {{- range .Annotations.SortedPairs -}},
+          { "decoratedText": { "topLabel": "{{ .Name }}", "text": "{{ .Value }}" } }
+          {{- end -}}
+        ]
+      }
+      {{- end -}}
+      {{- if gt .Overflow.Count 0 -}},
+      {
+        "widgets": [
+          { "textParagraph": { "text": "… and {{ .Overflow.Count }} more instances ({{ .Overflow.Firing }} firing / {{ .Overflow.Resolved }} resolved)" } }
+        ]
+      }
+      {{- end -}}
+    ]
+  }
+}
+{{- end -}}

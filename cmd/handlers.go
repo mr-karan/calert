@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	alertmgrtmpl "github.com/prometheus/alertmanager/template"
+	prvs "github.com/mr-karan/calert/internal/providers"
 )
 
 // wrap is a middleware that wraps HTTP handlers and injects the "app" context.
@@ -81,7 +81,7 @@ func handleDispatchNotif(w http.ResponseWriter, r *http.Request) {
 	var (
 		now     = time.Now()
 		app     = r.Context().Value("app").(*App)
-		payload = alertmgrtmpl.Data{}
+		payload = prvs.WebhookPayload{}
 	)
 
 	app.metrics.Increment(`http_requests_total{handler="dispatch"}`)
@@ -105,7 +105,7 @@ func handleDispatchNotif(w http.ResponseWriter, r *http.Request) {
 	// If there are a lot of alerts (>=10) to push, G-Chat API can be extremely slow to add messages
 	// to an existing thread. So it's better to enqueue it in background.
 	go func() {
-		if err := app.notifier.Dispatch(payload.Alerts, roomName); err != nil {
+		if err := app.notifier.Dispatch(payload, roomName); err != nil {
 			app.lo.Error("error dispatching alerts", "error", err)
 			app.metrics.Increment(`http_request_errors_total{handler="dispatch"}`)
 		}

@@ -27,8 +27,8 @@ type mockProvider struct {
 
 func (m *mockProvider) ID() string   { return "mock" }
 func (m *mockProvider) Room() string { return m.room }
-func (m *mockProvider) Push(alerts []alertmgrtmpl.Alert) error {
-	m.pushed = alerts
+func (m *mockProvider) Push(payload providers.WebhookPayload) error {
+	m.pushed = payload.Alerts
 	return m.pushErr
 }
 

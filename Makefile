@@ -9,6 +9,10 @@ BUILDSTR := ${VERSION} (Commit: ${LAST_COMMIT_DATE} (${LAST_COMMIT}), Build: $(s
 build: ## Build binary.
 	go build -o ${APP-BIN} -ldflags="-X 'main.buildString=${BUILDSTR}'" ./cmd/
 
+.PHONY: build-linux
+build-linux: ## Cross-compile a Linux amd64 binary (for deploying to the servers).
+	GOOS=linux GOARCH=amd64 go build -o ./bin/calert.linux-amd64 -ldflags="-X 'main.buildString=${BUILDSTR}'" ./cmd/
+
 .PHONY: run
 run: ## Run binary.
 	./${APP-BIN} --config ./config.toml

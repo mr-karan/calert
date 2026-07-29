@@ -11,8 +11,11 @@ max_idle_conns = 50 # Max idle connections in the HTTP Client.
 timeout = "30s" # Timeout for making requests to Provider.
 # proxy_url = "http://internal-squid-proxy.com:3128" # Specify `proxy_url` as your proxy endpoint to route all HTTP requests to the provider via a proxy.
 template = "static/message.tmpl" # Path to specify the message template path.
-thread_ttl = "12h" # Timeout to keep active alerts in memory. Once this TTL expires, a new thread will be created.
-threaded_replies = true # Whether to send threaded replies or not.
+thread_ttl = "12h" # Timeout to keep active alerts in memory. Once this TTL expires, a new thread will be created. In `group` threading mode this is the wall-clock bucket size for thread rollover.
+threaded_replies = true # Whether to send threaded replies or not. Ignored (always on) when threading_mode = "group".
+threading_mode = "alert" # `alert` (default): one thread per alert fingerprint (legacy). `group`: one thread per Alertmanager group, one aggregated message per webhook payload. Requires `send_resolved: true` on the Alertmanager receiver.
+dedup_window = "2m" # Group mode only: suppress a payload whose alert states are identical to the last posted one within this window (Alertmanager cluster-race duplicates).
+max_alerts_per_message = 10 # Group mode only: max per-instance sections rendered in one message; the rest are summarised as "and X more instances". Header counters stay exact.
 dry_run = false # In case you're simply experimenting with `calert` config changes and you don't wish to send _actual_ notifications, you can set `true`.
 retry_max = 3 # Maximum number of retries
 retry_wait_min = "1s" # Minimum time to wait before retrying

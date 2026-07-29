@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/mr-karan/calert/internal/providers"
-	alertmgrtmpl "github.com/prometheus/alertmanager/template"
 )
 
 // Notifier represents an instance that pushes out notifications to
@@ -38,8 +37,8 @@ func Init(opts Opts) (Notifier, error) {
 }
 
 // Dispatch pushes out a notification to an upstream provider.
-func (n *Notifier) Dispatch(alerts []alertmgrtmpl.Alert, room string) error {
-	n.lo.Info("dispatching alerts", "count", len(alerts))
+func (n *Notifier) Dispatch(payload providers.WebhookPayload, room string) error {
+	n.lo.Info("dispatching alerts", "count", len(payload.Alerts))
 
 	if _, ok := n.providers[room]; !ok {
 		availableRooms := make([]string, 0, len(n.providers))
@@ -60,6 +59,6 @@ func (n *Notifier) Dispatch(alerts []alertmgrtmpl.Alert, room string) error {
 		return fmt.Errorf("no provider configured for room: %s, available: %v%s", room, availableRooms, hint)
 	}
 
-	n.providers[room].Push(alerts)
+	n.providers[room].Push(payload)
 	return nil
 }
