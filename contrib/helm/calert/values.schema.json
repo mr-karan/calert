@@ -1,42 +1,154 @@
 {
-    "$schema": "https://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "additionalProperties": true,
-    "properties": {
-        "templates": {
-            "$comment": "Template keys must not contain slashes or other special characters, only alphanumeric characters, dots, underscores, and hyphens are allowed",
-            "anyOf": [
-                {
-                    "type": "null"
-                },
-                {
-                    "type": "object",
-                    "patternProperties": {
-                        "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,250}$": {
-                            "type": "string"
-                        }
-                    },
-                    "additionalProperties": false
-                }
-            ]
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "config": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "asSecret": {
+          "type": "boolean"
         },
-        "securityContext": {
-            "type": "object",
-            "additionalProperties": true,
-            "properties": {
-                "enabled": {
-                    "type": "boolean"
-                }
+        "existingSecret": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
             }
-        },
-        "podSecurityContext": {
-            "type": "object",
-            "additionalProperties": true,
-            "properties": {
-                "enabled": {
-                    "type": "boolean"
-                }
-            }
+          }
         }
+      }
+    },
+    "templates": {
+      "$comment": "Template keys must not contain slashes or other special characters, only alphanumeric characters, dots, underscores, and hyphens are allowed",
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "patternProperties": {
+            "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,250}$": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "providers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "threading_mode": {
+            "type": "string",
+            "enum": ["alert", "group"]
+          },
+          "dedup_window": {
+            "type": "string"
+          },
+          "max_alerts_per_message": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "redis": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "address": {
+                "type": "string"
+              },
+              "password": {
+                "type": "string"
+              },
+              "db": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "key_prefix": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "envFrom": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "prefix": {
+            "type": "string"
+          },
+          "configMapRef": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "optional": {
+                "type": "boolean"
+              }
+            }
+          },
+          "secretRef": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "optional": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "oneOf": [
+          {
+            "required": ["secretRef"],
+            "not": {
+              "required": ["configMapRef"]
+            }
+          },
+          {
+            "required": ["configMapRef"],
+            "not": {
+              "required": ["secretRef"]
+            }
+          }
+        ]
+      }
+    },
+    "securityContext": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "podSecurityContext": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
     }
+  }
 }

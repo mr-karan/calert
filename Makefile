@@ -32,6 +32,10 @@ lint:
 container-smoke: ## Build and smoke test the Ubuntu and scratch release images.
 	./scripts/container-smoke.sh
 
+.PHONY: helm-smoke
+helm-smoke: ## Lint and render the Helm chart smoke matrix.
+	./scripts/helm-smoke.sh
+
 .PHONY: dev-docker
 dev-docker: clean build ## Build and spawns docker containers for the entire suite (Alertmanager/Prometheus/calert).
 	cd dev; \

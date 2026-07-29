@@ -27,6 +27,22 @@ helm install calert calert/calert
 helm install calert calert/calert -f values.yaml
 ```
 
+## Configuration storage, templates, and environment sources
+
+Set `config.asSecret=true` to generate a Secret for `config.toml`. When `config.asSecret=true`, set `config.existingSecret.name` and `config.existingSecret.key` to mount an existing Secret instead. Custom `templates` are always stored in a separate ConfigMap, including both Secret modes, so template updates participate in pod rollout checksums.
+
+Use `env` for literal key/value environment variables. Use standard Kubernetes `envFrom` entries for Secret or ConfigMap sources:
+
+```yaml
+envFrom:
+  - secretRef:
+      name: calert-secrets
+  - configMapRef:
+      name: calert-env
+```
+
+Provider values support `threading_mode`, `dedup_window`, and `max_alerts_per_message`. For group threading across replicas, configure the optional nested `redis.address`, `redis.password`, `redis.db`, and `redis.key_prefix` values.
+
 ## Alertmanager Integration
 
 The Alertmanager helm chart can be found [here](https://github.com/prometheus-community/helm-charts/tree/main/charts/alertmanager). You can refer to the following config block to route webhook alerts to `calert`:
