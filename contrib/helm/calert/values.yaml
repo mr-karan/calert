@@ -2,6 +2,28 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+# -- Configuration storage options for config.toml.
+# WARNING: config.toml may contain sensitive values (webhook URLs, API keys).
+# Review config.sample.toml for all available options:
+# https://github.com/mr-karan/calert/blob/main/config.sample.toml
+#
+# When `asSecret` is true AND `existingSecret.name` is set, the `app` and `providers`
+# sections below are IGNORED and config is read from the referenced secret instead.
+config:
+  # -- Store config.toml in a Kubernetes Secret instead of a ConfigMap.
+  # Set to `true` if your config contains sensitive values such as webhook URLs
+  # or API keys. Defaults to `false` for backwards compatibility.
+  asSecret: false
+
+  # -- Reference an existing Secret that contains config.toml.
+  # Only applicable when `asSecret: true`.
+  # If `name` is empty, a Secret is generated from the `app` and `providers` values below.
+  existingSecret:
+    # -- Name of the existing Secret. Leave empty to generate one automatically.
+    name: ""
+    # -- Key within the existing Secret that holds the config.toml content.
+    key: "config.toml"
+
 # -- Application configuration block
 # @default -- See below
 app:
@@ -70,7 +92,13 @@ image:
 
 # -- Arguments to pass to the calert binary
 args:
-- "--config=/app/config.toml"
+  - "--config=/app/config.toml"
+
+# -- Environment variables to set on the container (key/value map).
+# Example:
+#   env:
+#     TZ: "America/Vancouver"
+env: {}
 
 # -- Override the name of the chart
 nameOverride: ""

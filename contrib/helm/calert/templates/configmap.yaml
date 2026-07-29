@@ -1,38 +1,17 @@
+{{- if or .Values.templates (not .Values.config.asSecret) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ template "calert.fullname" . }}-config
   labels:
-    app: {{ template "calert.name" . }}
-    chart: {{ template "calert.chart" . }}
-    heritage: {{ .Release.Service }}
-    release: {{ .Release.Name }}
+{{ include "calert.labels" . | indent 4 }}
 data:
   {{- range $key, $value := .Values.templates }}
   {{ $key }}: |-
     {{- $value | nindent 4 }}
   {{- end }}
+  {{- if not .Values.config.asSecret }}
   config.toml: |
-    # All timeouts and durations are in milliseconds.
-
-    [app]
-    address = {{ .Values.app.address | quote }}
-    server_timeout = {{ .Values.app.server_timeout | quote }}
-    enable_request_logs = {{ .Values.app.enable_request_logs | quote }}
-    log = {{ .Values.app.log | quote }}
-
-    {{- range $key, $value := .Values.providers }}
-    [providers.{{ $key }}]
-    type = {{ $value.type | default "google_chat" | quote }}
-    endpoint = {{ required "setting a endpoint for providers is required" $value.endpoint | quote }}
-    max_idle_conns = {{ $value.max_idle_conns | default 50 }}
-    timeout = {{ $value.timeout | default "30s" | quote }}
-    proxy_url = {{ $value.proxy_url | default "" | quote }}
-    template = {{ $value.template | default "static/message.tmpl" | quote }}
-    thread_ttl = {{ $value.thread_ttl | default "12h" | quote }}
-    threaded_replies = {{ $value.threaded_replies | default false }}
-    dry_run = {{ $value.dry_run | default false }}
-    retry_max = {{ $value.retry_max | default 3 }}
-    retry_wait_min = {{ $value.retry_wait_min | default "1s" | quote }}
-    retry_wait_max = {{ $value.retry_wait_max | default "5s" | quote }}
-    {{- end }}
+    {{- include "calert.configToml" . | nindent 4 }}
+  {{- end }}
+{{- end }}

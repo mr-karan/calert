@@ -13,11 +13,20 @@ spec:
   template:
     metadata:
       annotations:
-        # https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        {{- range $key, $value := .Values.podAnnotations }}
-        {{ $key }}: {{ $value | quote }}
+      {{- /*
+        Include checksum/config only if we aren't using an existing secret.
+        https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
+      */}}
+      {{- if .Values.config.asSecret }}
+        {{- if not .Values.config.existingSecret.name }}
+        checksum/config: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- end }}
+      {{- else }}
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      {{- end }}
+      {{- range $key, $value := .Values.podAnnotations }}
+        {{ $key }}: {{ $value | quote }}
+      {{- end }}
       labels:
         app.kubernetes.io/name: {{ include "calert.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
@@ -47,6 +56,13 @@ spec:
           {{- with omit .Values.securityContext "enabled" }}
           securityContext:
             {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
+        {{- if .Values.env }}
+          env:
+          {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
           {{- end }}
         {{- end }}
           ports:
@@ -93,8 +109,16 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
         - name: config-dir
+        {{- if .Values.config.asSecret }}
+          secret:
+            secretName: {{ include "calert.configSecretName" . }}
+            items:
+              - key: {{ include "calert.configSecretKey" . }}
+                path: config.toml
+        {{- else }}
           configMap:
             name: {{ template "calert.fullname" . }}-config
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

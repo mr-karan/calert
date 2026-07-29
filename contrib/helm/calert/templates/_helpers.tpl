@@ -43,3 +43,57 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
+
+{{/*
+Render the config.toml content from .Values.app and .Values.providers.
+Shared between the ConfigMap (default) and Secret (when config.asSecret=true) paths.
+*/}}
+{{- define "calert.configToml" -}}
+# All timeouts and durations are in milliseconds.
+
+[app]
+address = {{ .Values.app.address | quote }}
+server_timeout = {{ .Values.app.server_timeout | quote }}
+enable_request_logs = {{ .Values.app.enable_request_logs | quote }}
+log = {{ .Values.app.log | quote }}
+
+{{- range $key, $value := .Values.providers }}
+[providers.{{ $key }}]
+type = {{ $value.type | default "google_chat" | quote }}
+endpoint = {{ required "setting a endpoint for providers is required" $value.endpoint | quote }}
+max_idle_conns = {{ $value.max_idle_conns | default 50 }}
+timeout = {{ $value.timeout | default "30s" | quote }}
+proxy_url = {{ $value.proxy_url | default "" | quote }}
+template = {{ $value.template | default "static/message.tmpl" | quote }}
+thread_ttl = {{ $value.thread_ttl | default "12h" | quote }}
+threaded_replies = {{ $value.threaded_replies | default false }}
+dry_run = {{ $value.dry_run | default false }}
+retry_max = {{ $value.retry_max | default 3 }}
+retry_wait_min = {{ $value.retry_wait_min | default "1s" | quote }}
+retry_wait_max = {{ $value.retry_wait_max | default "5s" | quote }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Resolve the name of the Secret or ConfigMap containing config.toml.
+When config.asSecret=true and existingSecret.name is provided, returns that name.
+Otherwise falls back to the generated <fullname>-config name.
+*/}}
+{{- define "calert.configSecretName" -}}
+{{- if .Values.config.existingSecret.name -}}
+{{- .Values.config.existingSecret.name -}}
+{{- else -}}
+{{- template "calert.fullname" . }}-config
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve the key within the existing Secret that holds config.toml content.
+*/}}
+{{- define "calert.configSecretKey" -}}
+{{- if .Values.config.existingSecret.name -}}
+{{- .Values.config.existingSecret.key | default "config.toml" -}}
+{{- else -}}
+config.toml
+{{- end -}}
+{{- end -}}
