@@ -141,7 +141,7 @@ func TestGroupTemplateEscapesDynamicValuesAndSurfacesTruncation(t *testing.T) {
 	alert.Annotations["summary"] = "quote \" newline\n slash\\"
 	payload := groupPayload(alert)
 	payload.TruncatedAlerts = 3
-	ctx := buildGroupContext(payload, threadKeyForGroup("room", payload.GroupKey, openingAnchor(payload.Alerts)), 10, nil)
+	ctx := buildGroupContext(payload, threadKeyForGroup("room", payload.GroupKey, openingAnchor(payload.Alerts, incidentNow, time.Hour)), 10, nil)
 	msgs, err := chat.prepareMessage(ctx)
 	require.NoError(t, err)
 	require.Len(t, msgs, 1)

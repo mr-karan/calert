@@ -36,6 +36,7 @@ type GoogleChatManager struct {
 	dedupWindow     time.Duration
 	maxAlertsPerMsg int
 	groupStore      groupStateStore
+	now             func() time.Time
 }
 
 const (
@@ -208,6 +209,7 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 		threadTTL:       opts.ThreadTTL,
 		dedupWindow:     opts.DedupWindow,
 		maxAlertsPerMsg: opts.MaxAlertsPerMsg,
+		now:             time.Now,
 	}
 	if mgr.threadingMode == "" {
 		mgr.threadingMode = ThreadingModeAlert
@@ -278,7 +280,7 @@ func (m *GoogleChatManager) Push(ctx context.Context, payload providers.WebhookP
 // pushGroup posts one aggregated message per webhook payload into the thread
 // of the group's current incident.
 func (m *GoogleChatManager) pushGroup(ctx context.Context, payload providers.WebhookPayload) error {
-	now := time.Now()
+	now := m.now()
 	hash := stateHash(payload)
 
 	m.lo.Info("dispatching group notification to google chat", "group_key", payload.GroupKey, "count", len(payload.Alerts))
@@ -293,7 +295,7 @@ func (m *GoogleChatManager) pushGroup(ctx context.Context, payload providers.Web
 		return nil
 	}
 
-	anchor := incidentAnchorFor(previous, payload.Alerts)
+	anchor := incidentAnchorFor(previous, payload.Alerts, now, m.threadTTL)
 	threadKey := threadKeyForGroup(m.room, payload.GroupKey, anchor)
 
 	tmplCtx := buildGroupContext(payload, threadKey, m.maxAlertsPerMsg, previous.lastStatuses)
@@ -318,7 +320,7 @@ func (m *GoogleChatManager) pushGroup(ctx context.Context, payload providers.Web
 		}
 	}
 
-	completedAt := time.Now()
+	completedAt := m.now()
 	if err := m.groupStore.commit(ctx, m.room, payload.GroupKey, groupState{
 		lastHash:       hash,
 		lastPost:       completedAt,

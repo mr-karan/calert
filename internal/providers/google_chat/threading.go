@@ -16,9 +16,10 @@ import (
 )
 
 // threadKeyForGroup gives each incident of an Alertmanager group its own
-// thread. The anchor names the alert lifecycle that opened the incident, so
-// every notification of that incident lands in one thread and a later
-// incident of the same GroupKey starts a new one.
+// thread. The anchor names the alert lifecycle that opened the incident and
+// the threadTTL period it was opened in, so every notification of that
+// incident lands in one thread and a later incident of the same GroupKey
+// starts a new one.
 func threadKeyForGroup(room, groupKey, incidentAnchor string) string {
 	return hashKey(room, groupKey, incidentAnchor)
 }
@@ -36,9 +37,13 @@ func lifecycleOf(a alertmgrtmpl.Alert) string {
 // notification, so an incident lasts until every one of its alerts has
 // resolved. A payload without firing alerts only reports endings, so it never
 // opens an incident while one is known.
-func incidentAnchorFor(previous groupState, alerts []alertmgrtmpl.Alert) string {
+//
+// Known state is never older than threadTTL, because both stores expire it
+// then. Continuing through it therefore never posts into a thread that has
+// been quiet for longer than threadTTL.
+func incidentAnchorFor(previous groupState, alerts []alertmgrtmpl.Alert, now time.Time, threadTTL time.Duration) string {
 	if previous.incidentAnchor == "" {
-		return openingAnchor(alerts)
+		return openingAnchor(alerts, now, threadTTL)
 	}
 	if !hasFiring(alerts) {
 		return previous.incidentAnchor
@@ -48,13 +53,16 @@ func incidentAnchorFor(previous groupState, alerts []alertmgrtmpl.Alert) string 
 			return previous.incidentAnchor
 		}
 	}
-	return openingAnchor(alerts)
+	return openingAnchor(alerts, now, threadTTL)
 }
 
-// openingAnchor is derived from the payload alone so that replicas without
-// shared state, or a replica that lost its state mid-incident, compute the
-// same thread while the alert that opened the incident is still firing.
-func openingAnchor(alerts []alertmgrtmpl.Alert) string {
+// openingAnchor is derived from the payload and the clock only, so replicas
+// without shared state agree on the thread of a fresh incident. The anchor
+// carries the number of whole threadTTL periods since the opening alert
+// started. Without state, such as after a silence longer than threadTTL, an
+// old alert therefore lands in a later period and a new thread instead of
+// reviving a thread that may have been quiet for that long.
+func openingAnchor(alerts []alertmgrtmpl.Alert, now time.Time, threadTTL time.Duration) string {
 	candidates := alerts
 	if hasFiring(alerts) {
 		candidates = firingOnly(alerts)
@@ -70,7 +78,15 @@ func openingAnchor(alerts []alertmgrtmpl.Alert) string {
 			earliest = a
 		}
 	}
-	return earliest.Fingerprint + "@" + lifecycleOf(earliest)
+	return fmt.Sprintf("%s@%s#%d", earliest.Fingerprint, lifecycleOf(earliest), ttlPeriod(earliest.StartsAt, now, threadTTL))
+}
+
+func ttlPeriod(startsAt, now time.Time, threadTTL time.Duration) int64 {
+	age := now.Sub(startsAt)
+	if threadTTL <= 0 || age <= 0 {
+		return 0
+	}
+	return int64(age / threadTTL)
 }
 
 func hasFiring(alerts []alertmgrtmpl.Alert) bool {

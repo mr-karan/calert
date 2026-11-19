@@ -86,7 +86,7 @@ Example:
 |  `providers.<room_name>.max_idle_conns` 	| Maximum Keep Alive connections to keep in the pool.  	| yes | `50` |
 |  `providers.<room_name>.timeout` 	| Timeout for making HTTP requests to the webhook URL.  	| yes | `30s` |
 |  `providers.<room_name>.template` 	| Template for rendering a formatted Alert notification.  	| yes | `static/message.tmpl` |
-|  `providers.<room_name>.thread_ttl` 	| Group-state retention period. In group mode, keep it longer than Alertmanager's `repeat_interval` so a long incident keeps its thread.	| yes | `12h` |
+|  `providers.<room_name>.thread_ttl` 	| Group mode: the longest time a thread may stay quiet before the next notification starts a new thread. Keep it longer than Alertmanager's `repeat_interval` so a long incident keeps its thread.	| yes | `12h` |
 |  `providers.<room_name>.proxy_url` 	| Specify `proxy_url` as your proxy endpoint to route all HTTP requests to the provider via a proxy. | no | - |
 |  `providers.<room_name>.threaded_replies` 	| Whether to send threaded replies or not. Group mode always threads. | no | false |
 |  `providers.<room_name>.threading_mode` 	| `alert` (default) uses deterministic per-alert lifecycle keys. `group` uses one thread per incident of an Alertmanager GroupKey. | no | `alert` |
@@ -180,11 +180,11 @@ receivers:
 
 ### Understanding repeat_interval
 
-Alertmanager's `repeat_interval` controls how often alerts are re-sent while still firing. Deterministic thread keys keep the same alert lifecycle in the same thread and do not rotate when `thread_ttl` elapses. In group mode, `thread_ttl` controls retention of deduplication, resolved-status and incident state. Keep it longer than `repeat_interval`, see [docs/group-threading.md](docs/group-threading.md#incidents-and-threads).
+Alertmanager's `repeat_interval` controls how often alerts are re-sent while still firing. Deterministic thread keys keep the same alert lifecycle in the same thread and do not rotate when `thread_ttl` elapses. In group mode, `thread_ttl` is the longest time a thread may stay quiet, and the retention of deduplication, resolved-status and incident state. Keep it longer than `repeat_interval`, see [docs/group-threading.md](docs/group-threading.md#quiet-threads-and-thread_ttl).
 
 If you want fewer repeated messages:
 - Increase `repeat_interval` in Alertmanager config
-- Increase `thread_ttl` in group mode when deduplication, resolved-status and incident state should be retained longer
+- Increase `thread_ttl` in group mode when a thread should stay in use after a longer quiet period
 
 ### Kubernetes AlertmanagerConfig
 

@@ -44,19 +44,49 @@ Example for one group with alerts A1 and A2:
 | A1 fires again | new thread T2 |
 
 The anchor of a new incident is the firing alert with the earliest `StartsAt`
-in the payload, so it does not depend on stored state. Two replicas without
-shared state choose the same thread for the same incident.
+in the payload, together with the number of whole `thread_ttl` periods since
+that `StartsAt`. It depends only on the payload and the clock, so two replicas
+without shared state choose the same thread for a new incident.
 
-Limits:
+### Quiet threads and `thread_ttl`
+
+`thread_ttl` is the longest time a thread may stay quiet. calert keeps the
+state of a group for `thread_ttl` after its last delivered notification, and it
+never posts into a thread it has no state for unless the incident started
+less than `thread_ttl` ago.
+
+- A long incident keeps its thread as long as Alertmanager re-sends it within
+  `thread_ttl`. Set `thread_ttl` longer than `repeat_interval`.
+- When a group was quiet for longer than `thread_ttl`, for example during a
+  long silence, the next notification starts a new thread, even when the alert
+  that opened the old thread is still firing.
+
+### Silences
+
+Alertmanager removes silenced alerts from the payload, including their resolve,
+so calert does not see them while the silence lasts.
+
+| Event | Thread |
+|-------|--------|
+| A1 fires | new thread T1 |
+| A1 is silenced | no message |
+| A2 fires | new thread T2, because A1 is not in the payload |
+| A2 resolves | T2 |
+| silence on A1 ends within `thread_ttl`, A1 still firing | T1, if A1 started less than `thread_ttl` ago |
+| silence on A1 ends after `thread_ttl`, A1 still firing | new thread T3 |
+
+When A1 resolves while it is silenced, T1 never gets a resolved message, and
+the next firing of A1 starts a new thread.
+
+### Limits
 
 - Events closer together than Alertmanager's `group_interval` arrive in one
   payload. If all alerts resolve and one fires again inside that interval,
   calert never sees the full resolve and keeps the old thread.
-- Incident state expires with `thread_ttl`. Set `thread_ttl` longer than
-  `repeat_interval`, otherwise a long incident loses its state between
-  reminders. Without state, calert recomputes the anchor from the payload. The
-  thread stays the same while the alert that opened the incident still fires,
-  and changes once that alert has resolved.
+- Without state, calert recomputes the anchor from the payload. The thread then
+  stays the same only while the alert that opened the incident still fires and
+  started less than `thread_ttl` ago. A restart without Redis during an older
+  incident therefore starts a new thread.
 - State written before incident threading has no anchor. The first
   notification after the upgrade opens a new thread for each group.
 
@@ -85,7 +115,7 @@ template path to preserve a custom template.
 type = "google_chat"
 endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=...&token=..."
 threading_mode = "group"
-thread_ttl = "36h"              # state retention, longer than repeat_interval
+thread_ttl = "36h"              # longest quiet time of a thread, longer than repeat_interval
 dedup_window = "2m"
 max_alerts_per_message = 10
 
