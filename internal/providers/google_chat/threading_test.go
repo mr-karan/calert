@@ -15,9 +15,10 @@ import (
 
 func TestThreadKeysAreDeterministicAndScoped(t *testing.T) {
 	group := `{}:{alertname="Foo"}`
-	assert.Equal(t, threadKeyForGroup("room-a", group), threadKeyForGroup("room-a", group))
-	assert.NotEqual(t, threadKeyForGroup("room-a", group), threadKeyForGroup("room-b", group))
-	assert.NotEqual(t, threadKeyForGroup("room-a", group), threadKeyForGroup("room-a", "other"))
+	assert.Equal(t, threadKeyForGroup("room-a", group, "anchor"), threadKeyForGroup("room-a", group, "anchor"))
+	assert.NotEqual(t, threadKeyForGroup("room-a", group, "anchor"), threadKeyForGroup("room-b", group, "anchor"))
+	assert.NotEqual(t, threadKeyForGroup("room-a", group, "anchor"), threadKeyForGroup("room-a", "other", "anchor"))
+	assert.NotEqual(t, threadKeyForGroup("room-a", group, "anchor"), threadKeyForGroup("room-a", group, "other-anchor"))
 
 	startsAt := time.Date(2026, 6, 12, 10, 0, 0, 0, time.UTC)
 	assert.Equal(t, threadKeyForAlert("room-a", "fingerprint", startsAt), threadKeyForAlert("room-a", "fingerprint", startsAt))

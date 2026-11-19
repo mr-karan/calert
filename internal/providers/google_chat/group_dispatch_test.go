@@ -106,7 +106,7 @@ func testGroupModeDispatch(t *testing.T, backend string) {
 
 		keys := srv.keys()
 		require.Len(t, keys, 1, "one webhook payload must produce exactly one message")
-		expected := threadKeyForGroup(chat.Room(), payload.GroupKey)
+		expected := threadKeyForGroup(chat.Room(), payload.GroupKey, openingAnchor(payload.Alerts))
 		assert.Equal(t, expected, keys[0])
 	})
 

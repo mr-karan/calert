@@ -275,12 +275,11 @@ func (m *GoogleChatManager) Push(ctx context.Context, payload providers.WebhookP
 	return m.pushAlerts(ctx, payload.Alerts)
 }
 
-// pushGroup posts one aggregated message per webhook payload into the
-// group's deterministic thread.
+// pushGroup posts one aggregated message per webhook payload into the thread
+// of the group's current incident.
 func (m *GoogleChatManager) pushGroup(ctx context.Context, payload providers.WebhookPayload) error {
 	now := time.Now()
 	hash := stateHash(payload)
-	threadKey := threadKeyForGroup(m.room, payload.GroupKey)
 
 	m.lo.Info("dispatching group notification to google chat", "group_key", payload.GroupKey, "count", len(payload.Alerts))
 
@@ -293,6 +292,9 @@ func (m *GoogleChatManager) pushGroup(ctx context.Context, payload providers.Web
 		m.metrics.Increment(fmt.Sprintf(`alerts_deduplicated_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
 		return nil
 	}
+
+	anchor := incidentAnchorFor(previous, payload.Alerts)
+	threadKey := threadKeyForGroup(m.room, payload.GroupKey, anchor)
 
 	tmplCtx := buildGroupContext(payload, threadKey, m.maxAlertsPerMsg, previous.lastStatuses)
 	if len(tmplCtx.Alerts) == 0 && tmplCtx.TruncatedAlerts == 0 {
@@ -318,9 +320,11 @@ func (m *GoogleChatManager) pushGroup(ctx context.Context, payload providers.Web
 
 	completedAt := time.Now()
 	if err := m.groupStore.commit(ctx, m.room, payload.GroupKey, groupState{
-		lastHash:     hash,
-		lastPost:     completedAt,
-		lastStatuses: statusesOf(payload.Alerts),
+		lastHash:       hash,
+		lastPost:       completedAt,
+		lastStatuses:   statusesOf(payload.Alerts),
+		incidentAnchor: anchor,
+		openLifecycles: openLifecyclesOf(payload.Alerts),
 	}); err != nil {
 		m.lo.Warn("saving group dedup state failed after delivery", "error", err, "group_key", payload.GroupKey)
 		m.metrics.Increment(fmt.Sprintf(`group_dedup_store_errors_total{provider="%s", room="%s"}`, m.ID(), m.Room()))

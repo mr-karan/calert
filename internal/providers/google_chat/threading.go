@@ -15,11 +15,89 @@ import (
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
 )
 
-// threadKeyForGroup is stable for a room and Alertmanager group. threadTTL
-// controls state retention only; it never rolls a still-active group into a
-// different Google Chat thread.
-func threadKeyForGroup(room, groupKey string) string {
-	return hashKey(room, groupKey)
+// threadKeyForGroup gives each incident of an Alertmanager group its own
+// thread. The anchor names the alert lifecycle that opened the incident, so
+// every notification of that incident lands in one thread and a later
+// incident of the same GroupKey starts a new one.
+func threadKeyForGroup(room, groupKey, incidentAnchor string) string {
+	return hashKey(room, groupKey, incidentAnchor)
+}
+
+// lifecycleOf identifies one firing lifecycle of an alert. Alertmanager keeps
+// StartsAt for as long as the alert stays active, merging overlapping
+// re-sends to the earliest value, and assigns a new StartsAt to a refire.
+func lifecycleOf(a alertmgrtmpl.Alert) string {
+	return a.StartsAt.UTC().Format(time.RFC3339Nano)
+}
+
+// incidentAnchorFor decides whether a payload continues the group's previous
+// incident or opens a new one. A payload continues the incident when it
+// carries any alert lifecycle that was firing in the last delivered
+// notification, so an incident lasts until every one of its alerts has
+// resolved. A payload without firing alerts only reports endings, so it never
+// opens an incident while one is known.
+func incidentAnchorFor(previous groupState, alerts []alertmgrtmpl.Alert) string {
+	if previous.incidentAnchor == "" {
+		return openingAnchor(alerts)
+	}
+	if !hasFiring(alerts) {
+		return previous.incidentAnchor
+	}
+	for _, a := range alerts {
+		if lifecycle, ok := previous.openLifecycles[a.Fingerprint]; ok && lifecycle == lifecycleOf(a) {
+			return previous.incidentAnchor
+		}
+	}
+	return openingAnchor(alerts)
+}
+
+// openingAnchor is derived from the payload alone so that replicas without
+// shared state, or a replica that lost its state mid-incident, compute the
+// same thread while the alert that opened the incident is still firing.
+func openingAnchor(alerts []alertmgrtmpl.Alert) string {
+	candidates := alerts
+	if hasFiring(alerts) {
+		candidates = firingOnly(alerts)
+	}
+	if len(candidates) == 0 {
+		return ""
+	}
+
+	earliest := candidates[0]
+	for _, a := range candidates[1:] {
+		if a.StartsAt.Before(earliest.StartsAt) ||
+			(a.StartsAt.Equal(earliest.StartsAt) && a.Fingerprint < earliest.Fingerprint) {
+			earliest = a
+		}
+	}
+	return earliest.Fingerprint + "@" + lifecycleOf(earliest)
+}
+
+func hasFiring(alerts []alertmgrtmpl.Alert) bool {
+	for _, a := range alerts {
+		if a.Status == "firing" {
+			return true
+		}
+	}
+	return false
+}
+
+func firingOnly(alerts []alertmgrtmpl.Alert) []alertmgrtmpl.Alert {
+	firing := make([]alertmgrtmpl.Alert, 0, len(alerts))
+	for _, a := range alerts {
+		if a.Status == "firing" {
+			firing = append(firing, a)
+		}
+	}
+	return firing
+}
+
+func openLifecyclesOf(alerts []alertmgrtmpl.Alert) map[string]string {
+	open := make(map[string]string, len(alerts))
+	for _, a := range firingOnly(alerts) {
+		open[a.Fingerprint] = lifecycleOf(a)
+	}
+	return open
 }
 
 // threadKeyForAlert is the legacy per-alert thread key. StartsAt distinguishes
@@ -82,6 +160,12 @@ type groupState struct {
 	lastHash     string
 	lastPost     time.Time
 	lastStatuses map[string]string
+	// incidentAnchor is the thread anchor of the incident the last
+	// notification belonged to. Empty when no state is known.
+	incidentAnchor string
+	// openLifecycles maps fingerprint to lifecycle for the alerts that were
+	// firing in the last notification. Empty once the incident fully resolved.
+	openLifecycles map[string]string
 }
 
 func statusesOf(alerts []alertmgrtmpl.Alert) map[string]string {

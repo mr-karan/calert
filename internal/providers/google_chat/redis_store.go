@@ -25,6 +25,10 @@ type redisGroupState struct {
 	Hash     string            `json:"hash"`
 	LastPost string            `json:"last_post"`
 	Statuses map[string]string `json:"statuses"`
+	// Anchor and OpenLifecycles are absent in state written before incident
+	// threading. Such state opens a new incident on its next notification.
+	Anchor         string            `json:"anchor,omitempty"`
+	OpenLifecycles map[string]string `json:"open_lifecycles,omitempty"`
 }
 
 // commitStateScript compares fixed-width nanosecond strings lexicographically.
@@ -77,9 +81,11 @@ func (r *redisStore) inspect(ctx context.Context, room, groupKey, hash string, n
 		return groupState{}, false, fmt.Errorf("decoding group timestamp: %w", err)
 	}
 	state := groupState{
-		lastHash:     stored.Hash,
-		lastPost:     time.Unix(0, lastPost),
-		lastStatuses: stored.Statuses,
+		lastHash:       stored.Hash,
+		lastPost:       time.Unix(0, lastPost),
+		lastStatuses:   stored.Statuses,
+		incidentAnchor: stored.Anchor,
+		openLifecycles: stored.OpenLifecycles,
 	}
 	return state, state.lastHash == hash && now.Sub(state.lastPost) < window, nil
 }
@@ -87,9 +93,11 @@ func (r *redisStore) inspect(ctx context.Context, room, groupKey, hash string, n
 func (r *redisStore) commit(ctx context.Context, room, groupKey string, state groupState) error {
 	lastPost := fixedTimestamp(state.lastPost)
 	encoded, err := json.Marshal(redisGroupState{
-		Hash:     state.lastHash,
-		LastPost: lastPost,
-		Statuses: state.lastStatuses,
+		Hash:           state.lastHash,
+		LastPost:       lastPost,
+		Statuses:       state.lastStatuses,
+		Anchor:         state.incidentAnchor,
+		OpenLifecycles: state.openLifecycles,
 	})
 	if err != nil {
 		return fmt.Errorf("encoding group state: %w", err)
