@@ -22,11 +22,11 @@ var incidentNow = incidentStart.Add(2 * time.Hour)
 
 const testThreadTTL = 12 * time.Hour
 
-// newClockedChat builds a group-mode provider whose clock starts at
-// incidentNow. The returned advance moves that clock, and for the Redis
+// newClockedChat builds a group-mode provider with the given thread rotation
+// whose clock starts at incidentNow. The returned advance moves that clock, and for the Redis
 // backend also moves Redis time, so stored state expires as it would in
 // production.
-func newClockedChat(t *testing.T, endpoint, backend string) (*GoogleChatManager, func(time.Duration)) {
+func newClockedChat(t *testing.T, endpoint, backend, rotation string) (*GoogleChatManager, func(time.Duration)) {
 	t.Helper()
 	var mr *miniredis.Miniredis
 	var redisAddr string
@@ -41,6 +41,7 @@ func newClockedChat(t *testing.T, endpoint, backend string) (*GoogleChatManager,
 		Room:            "test",
 		Template:        "../../../static/message-group.tmpl",
 		ThreadingMode:   ThreadingModeGroup,
+		ThreadRotation:  rotation,
 		ThreadTTL:       testThreadTTL,
 		DedupWindow:     5 * time.Minute,
 		MaxAlertsPerMsg: 10,
@@ -78,7 +79,7 @@ func testGroupModeIncidentThreads(t *testing.T, backend string) {
 	t.Run("an incident keeps one thread until every alert resolves", func(t *testing.T) {
 		srv := newCapturingServer()
 		defer srv.Close()
-		chat, _ := newClockedChat(t, srv.URL, backend)
+		chat, _ := newClockedChat(t, srv.URL, backend, ThreadRotationIncident)
 		push := func(alerts ...alertmgrtmpl.Alert) {
 			require.NoError(t, chat.Push(context.Background(), groupPayload(alerts...)))
 		}
@@ -103,7 +104,7 @@ func testGroupModeIncidentThreads(t *testing.T, backend string) {
 	t.Run("a refire reported together with the last resolve stays in the incident", func(t *testing.T) {
 		srv := newCapturingServer()
 		defer srv.Close()
-		chat, _ := newClockedChat(t, srv.URL, backend)
+		chat, _ := newClockedChat(t, srv.URL, backend, ThreadRotationIncident)
 
 		require.NoError(t, chat.Push(context.Background(), groupPayload(
 			lifecycleAlert("a1", "firing", 0),
@@ -124,7 +125,7 @@ func testGroupModeIncidentThreads(t *testing.T, backend string) {
 	t.Run("a new member after a full resolve opens a new thread and hides old resolved members", func(t *testing.T) {
 		srv := newCapturingServer()
 		defer srv.Close()
-		chat, _ := newClockedChat(t, srv.URL, backend)
+		chat, _ := newClockedChat(t, srv.URL, backend, ThreadRotationIncident)
 
 		require.NoError(t, chat.Push(context.Background(), groupPayload(lifecycleAlert("a1", "firing", 0))))
 		require.NoError(t, chat.Push(context.Background(), groupPayload(lifecycleAlert("a1", "resolved", 0))))
@@ -143,7 +144,7 @@ func testGroupModeIncidentThreads(t *testing.T, backend string) {
 	t.Run("separate groups never share an incident thread", func(t *testing.T) {
 		srv := newCapturingServer()
 		defer srv.Close()
-		chat, _ := newClockedChat(t, srv.URL, backend)
+		chat, _ := newClockedChat(t, srv.URL, backend, ThreadRotationIncident)
 
 		first := groupPayload(lifecycleAlert("a1", "firing", 0))
 		second := groupPayload(lifecycleAlert("a1", "firing", 0))
@@ -159,8 +160,8 @@ func testGroupModeIncidentThreads(t *testing.T, backend string) {
 	t.Run("replicas without shared state agree on the thread while the opener fires", func(t *testing.T) {
 		srv := newCapturingServer()
 		defer srv.Close()
-		replicaA, _ := newClockedChat(t, srv.URL, backend)
-		replicaB, _ := newClockedChat(t, srv.URL, backend)
+		replicaA, _ := newClockedChat(t, srv.URL, backend, ThreadRotationIncident)
+		replicaB, _ := newClockedChat(t, srv.URL, backend, ThreadRotationIncident)
 
 		require.NoError(t, replicaA.Push(context.Background(), groupPayload(lifecycleAlert("a1", "firing", 0))))
 		require.NoError(t, replicaB.Push(context.Background(), groupPayload(
@@ -176,8 +177,8 @@ func testGroupModeIncidentThreads(t *testing.T, backend string) {
 	t.Run("lost state splits the thread once the opener has resolved", func(t *testing.T) {
 		srv := newCapturingServer()
 		defer srv.Close()
-		chat, _ := newClockedChat(t, srv.URL, backend)
-		restarted, _ := newClockedChat(t, srv.URL, backend)
+		chat, _ := newClockedChat(t, srv.URL, backend, ThreadRotationIncident)
+		restarted, _ := newClockedChat(t, srv.URL, backend, ThreadRotationIncident)
 
 		require.NoError(t, chat.Push(context.Background(), groupPayload(
 			lifecycleAlert("a1", "firing", 0),
@@ -199,8 +200,8 @@ func TestIncidentAnchorFor(t *testing.T) {
 	firstPeriod := func(a alertmgrtmpl.Alert) string { return a.Fingerprint + "@" + lifecycleOf(a) + "#0" }
 	opened := []alertmgrtmpl.Alert{lifecycleAlert("a1", "firing", 0), lifecycleAlert("a2", "firing", 10)}
 	anchor := openingAnchor(opened, now, ttl)
-	open := groupState{incidentAnchor: anchor, openLifecycles: openLifecyclesOf(opened)}
-	closed := groupState{incidentAnchor: anchor, openLifecycles: map[string]string{}}
+	open := groupState{threadAnchor: anchor, openLifecycles: openLifecyclesOf(opened)}
+	closed := groupState{threadAnchor: anchor, openLifecycles: map[string]string{}}
 
 	t.Run("anchors on the earliest firing alert", func(t *testing.T) {
 		assert.Equal(t, firstPeriod(opened[0]), anchor)
@@ -277,7 +278,7 @@ func testGroupModeThreadTTL(t *testing.T, backend string) {
 	silenceScenario := func(t *testing.T, silenceEndsAfter time.Duration) []string {
 		srv := newCapturingServer()
 		defer srv.Close()
-		chat, advance := newClockedChat(t, srv.URL, backend)
+		chat, advance := newClockedChat(t, srv.URL, backend, ThreadRotationIncident)
 		push := func(alerts ...alertmgrtmpl.Alert) {
 			require.NoError(t, chat.Push(context.Background(), groupPayload(alerts...)))
 		}
@@ -311,7 +312,7 @@ func testGroupModeThreadTTL(t *testing.T, backend string) {
 	t.Run("reminders within thread_ttl keep a long incident in one thread", func(t *testing.T) {
 		srv := newCapturingServer()
 		defer srv.Close()
-		chat, advance := newClockedChat(t, srv.URL, backend)
+		chat, advance := newClockedChat(t, srv.URL, backend, ThreadRotationIncident)
 
 		for i := 0; i < 4; i++ {
 			// Alertmanager re-sends an unchanged payload after repeat_interval.
@@ -348,11 +349,11 @@ func assertStoreKeepsIncidentState(t *testing.T, store groupStateStore) {
 	require.NoError(t, store.commit(context.Background(), "room", "group", groupState{
 		lastHash:       "hash",
 		lastPost:       now,
-		incidentAnchor: "a1@anchor",
+		threadAnchor:   "a1@anchor",
 		openLifecycles: open,
 	}))
 	state, _, err := store.inspect(context.Background(), "room", "group", "other", now.Add(time.Second), time.Minute)
 	require.NoError(t, err)
-	assert.Equal(t, "a1@anchor", state.incidentAnchor)
+	assert.Equal(t, "a1@anchor", state.threadAnchor)
 	assert.Equal(t, open, state.openLifecycles)
 }

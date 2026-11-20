@@ -15,13 +15,13 @@ import (
 	alertmgrtmpl "github.com/prometheus/alertmanager/template"
 )
 
-// threadKeyForGroup gives each incident of an Alertmanager group its own
-// thread. The anchor names the alert lifecycle that opened the incident and
-// the threadTTL period it was opened in, so every notification of that
-// incident lands in one thread and a later incident of the same GroupKey
-// starts a new one.
-func threadKeyForGroup(room, groupKey, incidentAnchor string) string {
-	return hashKey(room, groupKey, incidentAnchor)
+// threadKeyForGroup keeps the key of the "none" rotation, hash(room,
+// GroupKey), for an empty anchor, so existing deployments keep their threads.
+func threadKeyForGroup(room, groupKey, anchor string) string {
+	if anchor == "" {
+		return hashKey(room, groupKey)
+	}
+	return hashKey(room, groupKey, anchor)
 }
 
 // lifecycleOf identifies one firing lifecycle of an alert. Alertmanager keeps
@@ -31,26 +31,50 @@ func lifecycleOf(a alertmgrtmpl.Alert) string {
 	return a.StartsAt.UTC().Format(time.RFC3339Nano)
 }
 
-// incidentAnchorFor decides whether a payload continues the group's previous
-// incident or opens a new one. A payload continues the incident when it
-// carries any alert lifecycle that was firing in the last delivered
-// notification, so an incident lasts until every one of its alerts has
-// resolved. A payload without firing alerts only reports endings, so it never
-// opens an incident while one is known.
-//
-// Known state is never older than threadTTL, because both stores expire it
-// then. Continuing through it therefore never posts into a thread that has
-// been quiet for longer than threadTTL.
-func incidentAnchorFor(previous groupState, alerts []alertmgrtmpl.Alert, now time.Time, threadTTL time.Duration) string {
-	if previous.incidentAnchor == "" {
-		return openingAnchor(alerts, now, threadTTL)
+func groupAnchorFor(rotation string, previous groupState, alerts []alertmgrtmpl.Alert, now time.Time, threadTTL, incidentGrace time.Duration) string {
+	switch rotation {
+	case ThreadRotationTTL:
+		return rotationAnchorFor(previous, alerts, now, threadTTL)
+	case ThreadRotationIncident:
+		if withinIncidentGrace(previous, now, incidentGrace) {
+			return previous.threadAnchor
+		}
+		return incidentAnchorFor(previous, alerts, now, threadTTL)
+	default:
+		return ""
 	}
-	if !hasFiring(alerts) {
-		return previous.incidentAnchor
+}
+
+// rotationAnchorFor keeps the thread for as long as the group has state.
+// Known state is never older than threadTTL, because both stores expire it
+// then, so a group starts a new thread only after threadTTL without a post.
+func rotationAnchorFor(previous groupState, alerts []alertmgrtmpl.Alert, now time.Time, threadTTL time.Duration) string {
+	if previous.threadAnchor != "" {
+		return previous.threadAnchor
+	}
+	return openingAnchor(alerts, now, threadTTL)
+}
+
+// withinIncidentGrace keeps any new incident in the thread of the previous one
+// while the group posted less than incidentGrace ago. Every post extends the
+// grace, so alerts that keep flapping share one thread until the group stays
+// quiet for incidentGrace.
+func withinIncidentGrace(previous groupState, now time.Time, incidentGrace time.Duration) bool {
+	return incidentGrace > 0 && previous.threadAnchor != "" && now.Sub(previous.lastPost) < incidentGrace
+}
+
+// incidentAnchorFor adds incident detection to rotationAnchorFor. A payload
+// continues the incident when it carries any alert lifecycle that was firing
+// in the last delivered notification, so an incident lasts until every one of
+// its alerts has resolved. A payload without firing alerts only reports
+// endings, so it never opens an incident while one is known.
+func incidentAnchorFor(previous groupState, alerts []alertmgrtmpl.Alert, now time.Time, threadTTL time.Duration) string {
+	if previous.threadAnchor == "" || !hasFiring(alerts) {
+		return rotationAnchorFor(previous, alerts, now, threadTTL)
 	}
 	for _, a := range alerts {
 		if lifecycle, ok := previous.openLifecycles[a.Fingerprint]; ok && lifecycle == lifecycleOf(a) {
-			return previous.incidentAnchor
+			return previous.threadAnchor
 		}
 	}
 	return openingAnchor(alerts, now, threadTTL)
@@ -176,11 +200,11 @@ type groupState struct {
 	lastHash     string
 	lastPost     time.Time
 	lastStatuses map[string]string
-	// incidentAnchor is the thread anchor of the incident the last
-	// notification belonged to. Empty when no state is known.
-	incidentAnchor string
+	// threadAnchor is the anchor of the thread the last notification was
+	// posted to. Empty with the "none" rotation and when no state is known.
+	threadAnchor string
 	// openLifecycles maps fingerprint to lifecycle for the alerts that were
-	// firing in the last notification. Empty once the incident fully resolved.
+	// firing in the last notification. Kept only by the "incident" rotation.
 	openLifecycles map[string]string
 }
 

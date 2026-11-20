@@ -25,8 +25,8 @@ type redisGroupState struct {
 	Hash     string            `json:"hash"`
 	LastPost string            `json:"last_post"`
 	Statuses map[string]string `json:"statuses"`
-	// Anchor and OpenLifecycles are absent in state written before incident
-	// threading. Such state opens a new incident on its next notification.
+	// Anchor is absent with the "none" rotation and in state written before
+	// thread rotation. Such state starts a new thread on its next notification.
 	Anchor         string            `json:"anchor,omitempty"`
 	OpenLifecycles map[string]string `json:"open_lifecycles,omitempty"`
 }
@@ -84,7 +84,7 @@ func (r *redisStore) inspect(ctx context.Context, room, groupKey, hash string, n
 		lastHash:       stored.Hash,
 		lastPost:       time.Unix(0, lastPost),
 		lastStatuses:   stored.Statuses,
-		incidentAnchor: stored.Anchor,
+		threadAnchor:   stored.Anchor,
 		openLifecycles: stored.OpenLifecycles,
 	}
 	return state, state.lastHash == hash && now.Sub(state.lastPost) < window, nil
@@ -96,7 +96,7 @@ func (r *redisStore) commit(ctx context.Context, room, groupKey string, state gr
 		Hash:           state.lastHash,
 		LastPost:       lastPost,
 		Statuses:       state.lastStatuses,
-		Anchor:         state.incidentAnchor,
+		Anchor:         state.threadAnchor,
 		OpenLifecycles: state.openLifecycles,
 	})
 	if err != nil {

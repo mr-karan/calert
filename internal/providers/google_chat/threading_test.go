@@ -19,6 +19,7 @@ func TestThreadKeysAreDeterministicAndScoped(t *testing.T) {
 	assert.NotEqual(t, threadKeyForGroup("room-a", group, "anchor"), threadKeyForGroup("room-b", group, "anchor"))
 	assert.NotEqual(t, threadKeyForGroup("room-a", group, "anchor"), threadKeyForGroup("room-a", "other", "anchor"))
 	assert.NotEqual(t, threadKeyForGroup("room-a", group, "anchor"), threadKeyForGroup("room-a", group, "other-anchor"))
+	assert.Equal(t, hashKey("room-a", group), threadKeyForGroup("room-a", group, ""), "an empty anchor keeps the key from before thread rotation")
 
 	startsAt := time.Date(2026, 6, 12, 10, 0, 0, 0, time.UTC)
 	assert.Equal(t, threadKeyForAlert("room-a", "fingerprint", startsAt), threadKeyForAlert("room-a", "fingerprint", startsAt))

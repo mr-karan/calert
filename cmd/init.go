@@ -93,6 +93,8 @@ func initProviders(ko *koanf.Koanf, lo *slog.Logger, metrics *metrics.Manager) (
 		"thread_ttl":             "12h",
 		"threaded_replies":       false,
 		"threading_mode":         "alert",
+		"thread_rotation":        "none",
+		"incident_grace":         "0s",
 		"dedup_window":           "2m",
 		"max_alerts_per_message": 10,
 		"dry_run":                false,
@@ -128,6 +130,8 @@ func initProviders(ko *koanf.Koanf, lo *slog.Logger, metrics *metrics.Manager) (
 				ThreadTTL:       ko.MustDuration(fmt.Sprintf("%s.thread_ttl", cfgKey)),
 				ThreadedReplies: ko.Bool(fmt.Sprintf("%s.threaded_replies", cfgKey)),
 				ThreadingMode:   ko.String(fmt.Sprintf("%s.threading_mode", cfgKey)),
+				ThreadRotation:  ko.String(fmt.Sprintf("%s.thread_rotation", cfgKey)),
+				IncidentGrace:   ko.Duration(fmt.Sprintf("%s.incident_grace", cfgKey)),
 				DedupWindow:     ko.Duration(fmt.Sprintf("%s.dedup_window", cfgKey)),
 				MaxAlertsPerMsg: ko.Int(fmt.Sprintf("%s.max_alerts_per_message", cfgKey)),
 				Metrics:         metrics,
@@ -140,7 +144,7 @@ func initProviders(ko *koanf.Koanf, lo *slog.Logger, metrics *metrics.Manager) (
 				RedisDB:         ko.Int(fmt.Sprintf("%s.redis.db", cfgKey)),
 				RedisKeyPrefix:  ko.String(fmt.Sprintf("%s.redis.key_prefix", cfgKey)),
 			}
-			lo.Debug("provider options", "type", provType, "room", name, "threading_mode", opts.ThreadingMode, "dry_run", opts.DryRun)
+			lo.Debug("provider options", "type", provType, "room", name, "threading_mode", opts.ThreadingMode, "thread_rotation", opts.ThreadRotation, "dry_run", opts.DryRun)
 
 			gchat, err := google_chat.NewGoogleChat(opts)
 			if err != nil {
