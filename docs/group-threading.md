@@ -23,7 +23,7 @@ two rooms cannot share state.
 | `thread_rotation` | A group starts a new thread |
 |-------------------|-----------------------------|
 | `"none"` (default) | never, one thread per group |
-| `"rotation"` | after `thread_ttl` without a post |
+| `"ttl"` | after `thread_ttl` without a post |
 | `"incident"` | after `thread_ttl` without a post, and when the group fires again after all its alerts resolved |
 
 With `"none"`, `thread_ttl` is only the retention period of the group state,
@@ -31,7 +31,7 @@ and thread keys are the same as before thread rotation existed.
 
 ### Quiet threads and `thread_ttl`
 
-With `"rotation"` and `"incident"`, `thread_ttl` is the longest time a thread
+With `"ttl"` and `"incident"`, `thread_ttl` is the longest time a thread
 may stay quiet. calert keeps the state of a group for `thread_ttl` after its
 last delivered notification, and it never posts into a thread it has no state
 for unless the alert that opened the thread started less than `thread_ttl` ago.
@@ -72,7 +72,7 @@ Example for one group with alerts A1 and A2:
 | A1 resolves | T1, because A2 is still firing |
 | A1 fires again | T1, because A2 is still firing |
 | A1 and A2 resolve | T1 |
-| A1 fires again | new thread T2 (`"rotation"` keeps T1 if it was quiet for less than `thread_ttl`) |
+| A1 fires again | new thread T2 (`"ttl"` keeps T1 if it was quiet for less than `thread_ttl`) |
 
 ### Silences
 
@@ -125,7 +125,7 @@ Redis with more than one replica.
   less than `thread_ttl` ago. A restart without Redis during an older incident
   therefore starts a new thread.
 - Replicas without shared state each see only part of the notifications, so
-  with `"rotation"` or `"incident"` they can disagree on the thread, and a
+  with `"ttl"` or `"incident"` they can disagree on the thread, and a
   resolved message can land in a different thread than its firing one. Use
   Redis with more than one replica.
 - Switching `thread_rotation` from `"none"`, and state written before thread
@@ -156,7 +156,7 @@ template path to preserve a custom template.
 type = "google_chat"
 endpoint = "https://chat.googleapis.com/v1/spaces/xxx/messages?key=...&token=..."
 threading_mode = "group"
-thread_rotation = "incident"    # "none" (default), "rotation" or "incident"
+thread_rotation = "incident"    # "none" (default), "ttl" or "incident"
 incident_grace = "15m"          # keep a new incident in the thread for 15m after the last post
 thread_ttl = "36h"              # longest quiet time of a thread, longer than repeat_interval
 dedup_window = "2m"

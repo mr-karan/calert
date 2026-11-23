@@ -50,6 +50,8 @@ providers: {}
   #   thread_ttl: "12h" # TTL for active alerts in memory.
   #   threaded_replies: false # Send alerts as threaded replies.
   #   threading_mode: "alert" # Use "group" for one thread per Alertmanager group.
+  #   thread_rotation: "none" # Group mode: "none", "ttl" (new thread after thread_ttl without a post) or "incident".
+  #   incident_grace: "0s" # With thread_rotation "incident": keep a new incident in the previous thread for this long after the last post.
   #   dedup_window: "2m" # Suppress duplicate group payloads during this window.
   #   max_alerts_per_message: 10 # Maximum alert sections in a group message.
   #   redis: # Optional shared Redis state for group threading.

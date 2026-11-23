@@ -14,7 +14,7 @@ template = "static/message.tmpl" # Path to specify the message template path.
 thread_ttl = "12h" # Group mode state retention. With thread_rotation other than "none", also the longest quiet time of a thread. Keep it longer than Alertmanager's repeat_interval.
 threaded_replies = true # Whether to send threaded replies or not. Ignored (always on) when threading_mode = "group".
 threading_mode = "alert" # `alert` (default): one deterministic thread per alert lifecycle. `group`: one aggregated thread per Alertmanager GroupKey. Requires `send_resolved: true` on the Alertmanager receiver.
-thread_rotation = "none" # Group mode only. `none` (default): one thread per group. `rotation`: new thread after thread_ttl without a post. `incident`: also a new thread when the group fires again after a full resolve.
+thread_rotation = "none" # Group mode only. `none` (default): one thread per group. `ttl`: new thread after thread_ttl without a post. `incident`: also a new thread when the group fires again after a full resolve.
 incident_grace = "0s" # thread_rotation = "incident" only: a new incident stays in the previous thread when the group posted less than this long ago. Shorter than thread_ttl. 0s turns it off.
 dedup_window = "2m" # Group mode only: suppress a sequential identical payload after successful delivery.
 max_alerts_per_message = 10 # Group mode only: max per-instance sections per card; the rest are summarised.

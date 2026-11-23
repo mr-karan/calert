@@ -43,7 +43,7 @@ envFrom:
       name: calert-env
 ```
 
-Provider values support `threading_mode`, `dedup_window`, and `max_alerts_per_message`. For group threading across replicas, configure the optional nested `redis.address`, `redis.password`, `redis.db`, and `redis.key_prefix` values.
+Provider values support `threading_mode`, `thread_rotation`, `incident_grace`, `dedup_window`, and `max_alerts_per_message`. For group threading across replicas, configure the optional nested `redis.address`, `redis.password`, `redis.db`, and `redis.key_prefix` values.
 
 ## Alertmanager Integration
 

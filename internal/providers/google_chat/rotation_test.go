@@ -47,7 +47,7 @@ func testGroupModeThreadRotation(t *testing.T, backend string) {
 		}
 	})
 
-	t.Run("rotation starts a new thread only after thread_ttl without a post", func(t *testing.T) {
+	t.Run("ttl starts a new thread only after thread_ttl without a post", func(t *testing.T) {
 		keys := scenario(t, ThreadRotationTTL)
 		assert.Equal(t, keys[0], keys[1])
 		assert.Equal(t, keys[0], keys[2], "a refire within thread_ttl stays in the thread")
@@ -62,7 +62,7 @@ func testGroupModeThreadRotation(t *testing.T, backend string) {
 		assert.NotEqual(t, keys[0], keys[3])
 	})
 
-	t.Run("rotation keeps a long incident in one thread while posts arrive within thread_ttl", func(t *testing.T) {
+	t.Run("ttl keeps a long incident in one thread while posts arrive within thread_ttl", func(t *testing.T) {
 		srv := newCapturingServer()
 		defer srv.Close()
 		chat, advance := newClockedChat(t, srv.URL, backend, ThreadRotationTTL)

@@ -56,7 +56,7 @@ const (
 	// ThreadRotationNone keeps one thread per group forever.
 	ThreadRotationNone = "none"
 	// ThreadRotationTTL starts a new thread after threadTTL without a post.
-	ThreadRotationTTL = "rotation"
+	ThreadRotationTTL = "ttl"
 	// ThreadRotationIncident also starts a new thread when the group fires
 	// again after all of its alerts have resolved.
 	ThreadRotationIncident = "incident"
