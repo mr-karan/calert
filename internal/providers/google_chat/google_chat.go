@@ -32,10 +32,13 @@ type GoogleChatManager struct {
 	dryRun          bool
 	threadedReplies bool
 	threadingMode   string
+	threadRotation  string
+	incidentGrace   time.Duration
 	threadTTL       time.Duration
 	dedupWindow     time.Duration
 	maxAlertsPerMsg int
 	groupStore      groupStateStore
+	now             func() time.Time
 }
 
 const (
@@ -45,6 +48,18 @@ const (
 	// ThreadingModeGroup threads by Alertmanager group: one aggregated
 	// message per webhook payload, posted into a deterministic thread.
 	ThreadingModeGroup = "group"
+)
+
+// Thread rotation decides when group mode leaves a group's thread for a new
+// one. threadTTL is the longest time a rotating thread may stay quiet.
+const (
+	// ThreadRotationNone keeps one thread per group forever.
+	ThreadRotationNone = "none"
+	// ThreadRotationTTL starts a new thread after threadTTL without a post.
+	ThreadRotationTTL = "ttl"
+	// ThreadRotationIncident also starts a new thread when the group fires
+	// again after all of its alerts have resolved.
+	ThreadRotationIncident = "incident"
 )
 
 type GoogleChatOpts struct {
@@ -60,6 +75,8 @@ type GoogleChatOpts struct {
 	ThreadTTL       time.Duration
 	ThreadedReplies bool
 	ThreadingMode   string
+	ThreadRotation  string
+	IncidentGrace   time.Duration
 	DedupWindow     time.Duration
 	MaxAlertsPerMsg int
 	RetryMax        int
@@ -205,9 +222,12 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 		dryRun:          opts.DryRun,
 		threadedReplies: opts.ThreadedReplies,
 		threadingMode:   opts.ThreadingMode,
+		threadRotation:  opts.ThreadRotation,
+		incidentGrace:   opts.IncidentGrace,
 		threadTTL:       opts.ThreadTTL,
 		dedupWindow:     opts.DedupWindow,
 		maxAlertsPerMsg: opts.MaxAlertsPerMsg,
+		now:             time.Now,
 	}
 	if mgr.threadingMode == "" {
 		mgr.threadingMode = ThreadingModeAlert
@@ -223,6 +243,27 @@ func NewGoogleChat(opts GoogleChatOpts) (*GoogleChatManager, error) {
 	}
 	if mgr.threadingMode != ThreadingModeAlert && mgr.threadingMode != ThreadingModeGroup {
 		return nil, fmt.Errorf("invalid threading_mode %q: must be %q or %q", mgr.threadingMode, ThreadingModeAlert, ThreadingModeGroup)
+	}
+	if mgr.threadRotation == "" {
+		mgr.threadRotation = ThreadRotationNone
+	}
+	switch mgr.threadRotation {
+	case ThreadRotationNone, ThreadRotationTTL, ThreadRotationIncident:
+	default:
+		return nil, fmt.Errorf("invalid thread_rotation %q: must be %q, %q or %q", mgr.threadRotation, ThreadRotationNone, ThreadRotationTTL, ThreadRotationIncident)
+	}
+	if mgr.threadingMode != ThreadingModeGroup && mgr.threadRotation != ThreadRotationNone {
+		return nil, fmt.Errorf("thread_rotation %q requires threading_mode %q", mgr.threadRotation, ThreadingModeGroup)
+	}
+	if mgr.incidentGrace < 0 {
+		return nil, fmt.Errorf("incident_grace must not be negative")
+	}
+	if mgr.incidentGrace > 0 && mgr.threadRotation != ThreadRotationIncident {
+		return nil, fmt.Errorf("incident_grace requires thread_rotation %q", ThreadRotationIncident)
+	}
+	// State expires after threadTTL, so a longer grace could never apply.
+	if mgr.incidentGrace >= mgr.threadTTL {
+		return nil, fmt.Errorf("incident_grace must be shorter than thread_ttl")
 	}
 	if mgr.threadingMode == ThreadingModeGroup && mgr.dedupWindow == 0 {
 		mgr.dedupWindow = 2 * time.Minute
@@ -275,12 +316,11 @@ func (m *GoogleChatManager) Push(ctx context.Context, payload providers.WebhookP
 	return m.pushAlerts(ctx, payload.Alerts)
 }
 
-// pushGroup posts one aggregated message per webhook payload into the
-// group's deterministic thread.
+// pushGroup posts one aggregated message per webhook payload into the group's
+// current thread, which the thread rotation chooses.
 func (m *GoogleChatManager) pushGroup(ctx context.Context, payload providers.WebhookPayload) error {
-	now := time.Now()
+	now := m.now()
 	hash := stateHash(payload)
-	threadKey := threadKeyForGroup(m.room, payload.GroupKey)
 
 	m.lo.Info("dispatching group notification to google chat", "group_key", payload.GroupKey, "count", len(payload.Alerts))
 
@@ -293,6 +333,9 @@ func (m *GoogleChatManager) pushGroup(ctx context.Context, payload providers.Web
 		m.metrics.Increment(fmt.Sprintf(`alerts_deduplicated_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
 		return nil
 	}
+
+	anchor := groupAnchorFor(m.threadRotation, previous, payload.Alerts, now, m.threadTTL, m.incidentGrace)
+	threadKey := threadKeyForGroup(m.room, payload.GroupKey, anchor)
 
 	tmplCtx := buildGroupContext(payload, threadKey, m.maxAlertsPerMsg, previous.lastStatuses)
 	if len(tmplCtx.Alerts) == 0 && tmplCtx.TruncatedAlerts == 0 {
@@ -316,12 +359,16 @@ func (m *GoogleChatManager) pushGroup(ctx context.Context, payload providers.Web
 		}
 	}
 
-	completedAt := time.Now()
-	if err := m.groupStore.commit(ctx, m.room, payload.GroupKey, groupState{
+	state := groupState{
 		lastHash:     hash,
-		lastPost:     completedAt,
+		lastPost:     m.now(),
 		lastStatuses: statusesOf(payload.Alerts),
-	}); err != nil {
+		threadAnchor: anchor,
+	}
+	if m.threadRotation == ThreadRotationIncident {
+		state.openLifecycles = openLifecyclesOf(payload.Alerts)
+	}
+	if err := m.groupStore.commit(ctx, m.room, payload.GroupKey, state); err != nil {
 		m.lo.Warn("saving group dedup state failed after delivery", "error", err, "group_key", payload.GroupKey)
 		m.metrics.Increment(fmt.Sprintf(`group_dedup_store_errors_total{provider="%s", room="%s"}`, m.ID(), m.Room()))
 	}

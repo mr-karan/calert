@@ -96,6 +96,7 @@ func testGroupModeDispatch(t *testing.T, backend string) {
 		srv := newCapturingServer()
 		defer srv.Close()
 		chat := newGroupModeChatStore(t, srv.URL, backend)
+		chat.now = func() time.Time { return incidentNow }
 
 		payload := groupPayload(
 			groupAlert("a", "firing", "node1"),
@@ -106,8 +107,7 @@ func testGroupModeDispatch(t *testing.T, backend string) {
 
 		keys := srv.keys()
 		require.Len(t, keys, 1, "one webhook payload must produce exactly one message")
-		expected := threadKeyForGroup(chat.Room(), payload.GroupKey)
-		assert.Equal(t, expected, keys[0])
+		assert.Equal(t, hashKey(chat.Room(), payload.GroupKey), keys[0], "the default rotation keeps the key of one thread per group")
 	})
 
 	t.Run("suppresses identical payload within the dedup window", func(t *testing.T) {

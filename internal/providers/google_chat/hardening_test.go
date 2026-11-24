@@ -141,7 +141,7 @@ func TestGroupTemplateEscapesDynamicValuesAndSurfacesTruncation(t *testing.T) {
 	alert.Annotations["summary"] = "quote \" newline\n slash\\"
 	payload := groupPayload(alert)
 	payload.TruncatedAlerts = 3
-	ctx := buildGroupContext(payload, threadKeyForGroup("room", payload.GroupKey), 10, nil)
+	ctx := buildGroupContext(payload, threadKeyForGroup("room", payload.GroupKey, ""), 10, nil)
 	msgs, err := chat.prepareMessage(ctx)
 	require.NoError(t, err)
 	require.Len(t, msgs, 1)
@@ -178,6 +178,42 @@ func TestNewGoogleChatRejectsInvalidGroupSettings(t *testing.T) {
 	badCap := base
 	badCap.MaxAlertsPerMsg = 0
 	_, err = NewGoogleChat(badCap)
+	assert.Error(t, err)
+
+	badRotation := base
+	badRotation.ThreadRotation = "idle"
+	_, err = NewGoogleChat(badRotation)
+	assert.Error(t, err)
+
+	negativeGrace := base
+	negativeGrace.ThreadRotation = ThreadRotationIncident
+	negativeGrace.IncidentGrace = -time.Second
+	_, err = NewGoogleChat(negativeGrace)
+	assert.Error(t, err)
+
+	graceWithoutIncidents := base
+	graceWithoutIncidents.ThreadRotation = ThreadRotationTTL
+	graceWithoutIncidents.IncidentGrace = time.Minute
+	_, err = NewGoogleChat(graceWithoutIncidents)
+	assert.Error(t, err)
+
+	graceAsLongAsTTL := base
+	graceAsLongAsTTL.ThreadRotation = ThreadRotationIncident
+	graceAsLongAsTTL.IncidentGrace = base.ThreadTTL
+	_, err = NewGoogleChat(graceAsLongAsTTL)
+	assert.Error(t, err)
+
+	validGrace := base
+	validGrace.ThreadRotation = ThreadRotationIncident
+	validGrace.IncidentGrace = time.Minute
+	_, err = NewGoogleChat(validGrace)
+	assert.NoError(t, err)
+
+	rotationWithoutGroups := base
+	rotationWithoutGroups.ThreadingMode = ThreadingModeAlert
+	rotationWithoutGroups.Template = "../../../static/message.tmpl"
+	rotationWithoutGroups.ThreadRotation = ThreadRotationIncident
+	_, err = NewGoogleChat(rotationWithoutGroups)
 	assert.Error(t, err)
 }
 

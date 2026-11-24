@@ -86,10 +86,12 @@ Example:
 |  `providers.<room_name>.max_idle_conns` 	| Maximum Keep Alive connections to keep in the pool.  	| yes | `50` |
 |  `providers.<room_name>.timeout` 	| Timeout for making HTTP requests to the webhook URL.  	| yes | `30s` |
 |  `providers.<room_name>.template` 	| Template for rendering a formatted Alert notification.  	| yes | `static/message.tmpl` |
-|  `providers.<room_name>.thread_ttl` 	| Group-state retention period. It does not rotate a recurring GroupKey into a new Chat thread.	| yes | `12h` |
+|  `providers.<room_name>.thread_ttl` 	| Group-state retention period. With `thread_rotation` other than `none`, also the longest time a thread may stay quiet before the next notification starts a new thread. Keep it longer than Alertmanager's `repeat_interval` so a long incident keeps its thread.	| yes | `12h` |
 |  `providers.<room_name>.proxy_url` 	| Specify `proxy_url` as your proxy endpoint to route all HTTP requests to the provider via a proxy. | no | - |
 |  `providers.<room_name>.threaded_replies` 	| Whether to send threaded replies or not. Group mode always threads. | no | false |
 |  `providers.<room_name>.threading_mode` 	| `alert` (default) uses deterministic per-alert lifecycle keys. `group` uses one thread per Alertmanager GroupKey. | no | `alert` |
+|  `providers.<room_name>.thread_rotation` 	| Group mode: when a group leaves its thread for a new one. `none` keeps one thread per group. `ttl` starts a new thread after `thread_ttl` without a post. `incident` also starts a new thread when the group fires again after all its alerts resolved. See [docs/group-threading.md](docs/group-threading.md#thread-rotation). | no | `none` |
+|  `providers.<room_name>.incident_grace` 	| With `thread_rotation = "incident"`: a new incident stays in the previous thread when the group posted less than this long ago. Must be shorter than `thread_ttl`. See [docs/group-threading.md](docs/group-threading.md#incident-grace). | no | `0s` (off) |
 |  `providers.<room_name>.dedup_window` 	| Group-mode window for sequential identical payloads after successful delivery. | no | `2m` |
 |  `providers.<room_name>.max_alerts_per_message` 	| Maximum alert sections in a group card. | no | `10` |
 |  `providers.<room_name>.redis.*` 	| Optional Redis address, password, db, and key_prefix for shared group state. | no | - |
@@ -180,11 +182,11 @@ receivers:
 
 ### Understanding repeat_interval
 
-Alertmanager's `repeat_interval` controls how often alerts are re-sent while still firing. Deterministic thread keys keep the same alert lifecycle in the same thread and do not rotate when `thread_ttl` elapses. In group mode, `thread_ttl` controls only retention of deduplication and resolved-status state.
+Alertmanager's `repeat_interval` controls how often alerts are re-sent while still firing. Deterministic thread keys keep the same alert lifecycle in the same thread and do not rotate when `thread_ttl` elapses. In group mode, `thread_ttl` controls retention of deduplication and resolved-status state. With `thread_rotation = "ttl"` or `"incident"` it is also the longest time a thread may stay quiet, so keep it longer than `repeat_interval`, see [docs/group-threading.md](docs/group-threading.md#thread-rotation).
 
 If you want fewer repeated messages:
 - Increase `repeat_interval` in Alertmanager config
-- Increase `thread_ttl` in group mode only when deduplication and resolved-status state should be retained longer
+- Increase `thread_ttl` in group mode when state, or with `thread_rotation` a quiet thread, should be kept longer
 
 ### Kubernetes AlertmanagerConfig
 
