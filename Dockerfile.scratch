@@ -1,4 +1,4 @@
-FROM ubuntu:24.04 AS runtime-files
+FROM ubuntu:26.04 AS runtime-files
 
 ARG CALERT_GID="999"
 ARG CALERT_UID="999"

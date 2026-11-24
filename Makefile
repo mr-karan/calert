@@ -26,7 +26,7 @@ fresh: build run
 
 .PHONY: lint
 lint:
-	docker run --rm -v $(CURDIR):/app -w /app golangci/golangci-lint:v2.12.2 golangci-lint run -v
+	docker run --rm -v $(CURDIR):/app -w /app golangci/golangci-lint:v2.15.0 golangci-lint run -v
 
 .PHONY: container-smoke
 container-smoke: ## Build and smoke test the Ubuntu and scratch release images.

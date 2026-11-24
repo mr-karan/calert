@@ -24,7 +24,7 @@ services:
       - GOMODCACHE=/app/.cache/go-mod
 
   alertmanager:
-    image: prom/alertmanager:v0.33.1
+    image: prom/alertmanager:v0.35.0
     container_name: alertmanager
     volumes:
       - ./alertmanager:/etc/alertmanager
@@ -40,7 +40,7 @@ services:
       - calert
 
   prometheus:
-    image: prom/prometheus:v3.13.1
+    image: prom/prometheus:v3.16.0
     container_name: prometheus
     volumes:
       - ./prometheus:/etc/prometheus

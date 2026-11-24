@@ -21,7 +21,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: "1.26.5"
+          go-version: "1.27.4"
           cache: true
 
       - name: Set up QEMU
@@ -41,7 +41,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
-          version: v2.17.1
+          version: v2.20.3
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
