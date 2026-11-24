@@ -106,8 +106,17 @@ func openingAnchor(alerts []alertmgrtmpl.Alert, now time.Time, threadTTL time.Du
 }
 
 func ttlPeriod(startsAt, now time.Time, threadTTL time.Duration) int64 {
+	if threadTTL <= 0 {
+		return 0
+	}
+	if startsAt.IsZero() {
+		if now.UnixNano() <= 0 {
+			return 0
+		}
+		return now.UnixNano() / threadTTL.Nanoseconds()
+	}
 	age := now.Sub(startsAt)
-	if threadTTL <= 0 || age <= 0 {
+	if age <= 0 {
 		return 0
 	}
 	return int64(age / threadTTL)
@@ -133,9 +142,11 @@ func firingOnly(alerts []alertmgrtmpl.Alert) []alertmgrtmpl.Alert {
 }
 
 func openLifecyclesOf(alerts []alertmgrtmpl.Alert) map[string]string {
-	open := make(map[string]string, len(alerts))
-	for _, a := range firingOnly(alerts) {
-		open[a.Fingerprint] = lifecycleOf(a)
+	open := make(map[string]string)
+	for _, a := range alerts {
+		if a.Status == "firing" {
+			open[a.Fingerprint] = lifecycleOf(a)
+		}
 	}
 	return open
 }

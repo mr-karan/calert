@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/knadh/koanf"
 	"github.com/knadh/koanf/parsers/toml"
@@ -119,6 +120,14 @@ func initProviders(ko *koanf.Koanf, lo *slog.Logger, metrics *metrics.Manager) (
 		provType := ko.String(fmt.Sprintf("%s.type", cfgKey))
 		switch provType {
 		case "google_chat":
+			var incidentGrace time.Duration
+			if rawGrace := ko.String(fmt.Sprintf("%s.incident_grace", cfgKey)); rawGrace != "" {
+				var err error
+				incidentGrace, err = time.ParseDuration(rawGrace)
+				if err != nil {
+					return nil, fmt.Errorf("invalid incident_grace %q for provider %s: %w", rawGrace, name, err)
+				}
+			}
 			opts := google_chat.GoogleChatOpts{
 				Log:             lo,
 				Timeout:         ko.MustDuration(fmt.Sprintf("%s.timeout", cfgKey)),
@@ -131,7 +140,7 @@ func initProviders(ko *koanf.Koanf, lo *slog.Logger, metrics *metrics.Manager) (
 				ThreadedReplies: ko.Bool(fmt.Sprintf("%s.threaded_replies", cfgKey)),
 				ThreadingMode:   ko.String(fmt.Sprintf("%s.threading_mode", cfgKey)),
 				ThreadRotation:  ko.String(fmt.Sprintf("%s.thread_rotation", cfgKey)),
-				IncidentGrace:   ko.Duration(fmt.Sprintf("%s.incident_grace", cfgKey)),
+				IncidentGrace:   incidentGrace,
 				DedupWindow:     ko.Duration(fmt.Sprintf("%s.dedup_window", cfgKey)),
 				MaxAlertsPerMsg: ko.Int(fmt.Sprintf("%s.max_alerts_per_message", cfgKey)),
 				Metrics:         metrics,

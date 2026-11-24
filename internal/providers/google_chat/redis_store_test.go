@@ -59,6 +59,24 @@ func TestRedisStoreCommitDoesNotRegressNewerState(t *testing.T) {
 	assert.Equal(t, "resolved", state.lastStatuses["a"])
 }
 
+func TestRedisStoreInspectExpiresStatePastConfiguredTTL(t *testing.T) {
+	store, _ := newTestRedisStore(t)
+	now := time.Now()
+	require.NoError(t, store.commit(context.Background(), "room", "group", groupState{
+		lastHash:     "hash",
+		lastPost:     now,
+		threadAnchor: "a1@anchor",
+	}))
+
+	// Simulate lowering thread_ttl on restart while the Redis key still has
+	// remaining TTL from the earlier write.
+	store.ttl = time.Hour
+	state, duplicate, err := store.inspect(context.Background(), "room", "group", "hash", now.Add(time.Hour), 2*time.Hour)
+	require.NoError(t, err)
+	assert.False(t, duplicate)
+	assert.Empty(t, state.threadAnchor)
+}
+
 func TestRedisStoreKeysAreRoomScopedAndBounded(t *testing.T) {
 	store, _ := newTestRedisStore(t)
 	group := `{}:{alertname="sensitive / very long group key"}`

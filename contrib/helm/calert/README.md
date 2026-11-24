@@ -106,7 +106,7 @@ config:
 | podSecurityContext.seccompProfile | object | `{"type":"RuntimeDefault"}` | Seccomp profile configuration |
 | podSecurityContext.windowsOptions | object | `{"hostProcess":false}` | Windows-specific options |
 | priorityClassName | string | `""` | Priority class name for pod scheduling |
-| providers | object | `{}` (no providers configured) | Provider configuration for routing alerts to different Google Chat rooms. Supports threading_mode, dedup_window, max_alerts_per_message, and nested redis settings. See [config.sample.toml](https://github.com/mr-karan/calert/blob/main/config.sample.toml) for more details |
+| providers | object | `{}` (no providers configured) | Provider configuration for routing alerts to different Google Chat rooms. Supports threading_mode, thread_rotation, incident_grace, dedup_window, max_alerts_per_message, and nested redis settings. See [config.sample.toml](https://github.com/mr-karan/calert/blob/main/config.sample.toml) for more details |
 | readinessProbe | object | `{"periodSeconds":60,"timeoutSeconds":3}` | Readiness probe configuration |
 | readinessProbe.periodSeconds | int | `60` | How often to perform the probe (seconds) |
 | readinessProbe.timeoutSeconds | int | `3` | Probe timeout (seconds) |

@@ -263,6 +263,7 @@ func TestTTLPeriod(t *testing.T) {
 	assert.Equal(t, int64(3), ttlPeriod(incidentStart, incidentStart.Add(3*ttl+time.Hour), ttl))
 	assert.Equal(t, int64(0), ttlPeriod(incidentStart, incidentStart.Add(-time.Hour), ttl), "clock skew must not go negative")
 	assert.Equal(t, int64(0), ttlPeriod(incidentStart, incidentStart.Add(time.Hour), 0))
+	assert.Equal(t, ttlPeriod(time.Time{}, incidentStart, ttl)+1, ttlPeriod(time.Time{}, incidentStart.Add(ttl), ttl), "zero StartsAt must still advance across TTL periods")
 }
 
 func TestGroupModeThreadTTL(t *testing.T) {

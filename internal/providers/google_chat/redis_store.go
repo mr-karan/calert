@@ -87,6 +87,9 @@ func (r *redisStore) inspect(ctx context.Context, room, groupKey, hash string, n
 		threadAnchor:   stored.Anchor,
 		openLifecycles: stored.OpenLifecycles,
 	}
+	if !state.lastPost.IsZero() && now.Sub(state.lastPost) >= r.ttl {
+		return groupState{}, false, nil
+	}
 	return state, state.lastHash == hash && now.Sub(state.lastPost) < window, nil
 }
 
