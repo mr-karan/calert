@@ -1,9 +1,11 @@
 # Group threading and shared state
 
-Group threading sends the notifications of an Alertmanager group to a Google
-Chat thread as one aggregated message per payload. By default a group keeps one
-thread forever. `thread_rotation` can start a new thread after a quiet period
-or for each new incident of the group.
+> Back to [README.md](../README.md)
+
+Group threading (`threading_mode = "group"`) sends the notifications of an
+Alertmanager group to a Google Chat thread as one aggregated message per
+payload. By default a group keeps one thread forever. `thread_rotation` can
+start a new thread after a quiet period or for each new incident of the group.
 
 ## When to use what
 
@@ -141,7 +143,7 @@ there is intentionally no pre-delivery distributed claim.
 
 If Redis is unavailable, calert posts without dedup state. If Redis fails
 while saving state after delivery, the notification remains successful and
-`group_dedup_store_errors_total` increments.
+`calert_group_dedup_store_errors_total` increments.
 
 ## Configuration
 
@@ -167,16 +169,29 @@ max_alerts_per_message = 10
 address = "redis:6379"
 password = ""
 db = 0
-key_prefix = "calert:"
+key_prefix = "calert"
 ```
 
 `TruncatedAlerts` reported by Alertmanager is surfaced in the group card as an
 upstream truncation notice. It is not added to the card's firing or resolved
 counters because those counters only describe the payload that calert received.
 
+### Custom group templates
+
+When writing a custom template for `threading_mode = "group"`, the template
+receives a `GroupTemplateContext` with:
+
+- `.AlertName`, `.Status`, `.Labels`, `.Annotations`, `.GeneratorURL`, `.TrackingKey`
+- `.FiringCount`, `.ResolvedCount` (counts for the rendered set including overflow)
+- `.Alerts` (firing-first, capped at `max_alerts_per_message`, with already-shown resolved instances omitted)
+- `.Overflow` (`.Count`, `.Firing`, `.Resolved`) and `.TruncatedAlerts`
+
+See [static/message-group.tmpl](../static/message-group.tmpl) for the bundled
+reference template.
+
 ## Metrics
 
-- `alerts_deduplicated_total` counts sequential duplicate payloads suppressed
-  after a successful prior delivery.
-- `group_dedup_store_errors_total` counts state-store inspection or save
+- `calert_alerts_deduplicated_total` counts sequential duplicate payloads
+  suppressed after a successful prior delivery.
+- `calert_group_dedup_store_errors_total` counts state-store inspection or save
   failures. Non-zero means duplicate delivery is possible.

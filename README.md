@@ -6,15 +6,18 @@ _Send Alertmanager notifications to Google Chat (and more!)_
 
 ![](docs/images/calert.png)
 
-`calert` uses Alertmanager [webhook receiver](https://prometheus.io/docs/alerting/configuration/#webhook_config) to receive alerts payload, and pushes this data to Google Chat [webhook](https://developers.google.com/hangouts/chat/how-tos/webhooks) endpoint.
+`calert` receives webhooks from Prometheus [Alertmanager](https://prometheus.io/docs/alerting/latest/configuration/#webhook_config) and delivers formatted notifications to [Google Chat webhooks](https://developers.google.com/workspace/chat/quickstart/webhooks).
+
+- **Flexible threading:** Deterministic per-alert threads (`alert` mode) or aggregated per-group threads (`group` mode) with opt-in TTL and incident-based thread rotation.
+- **Active-active ready:** Optional Redis-backed state sharing for group deduplication and thread rotation across replicas.
+- **Rich formatting:** Go templates with helper functions and Google Chat CardsV2 support, including bundled text and card templates.
+- **Observable & lightweight:** Built-in Prometheus `/metrics`, `/ping` health check, Ubuntu and `scratch` container images, and an official Helm chart.
 
 ## Quickstart
 
 ### Binary
 
-Grab the latest release from [Releases](https://github.com/mr-karan/calert/releases).
-
-To run:
+Download the latest release from [Releases](https://github.com/mr-karan/calert/releases), copy [config.sample.toml](config.sample.toml) to `config.toml`, and run:
 
 ```sh
 ./calert.bin --config config.toml
@@ -22,112 +25,147 @@ To run:
 
 ### Docker
 
-You can find the list of docker images [here](https://github.com/mr-karan/calert/pkgs/container/calert)
+Multi-arch images (`linux/amd64`, `linux/arm64`) are published to [GitHub Container Registry](https://github.com/mr-karan/calert/pkgs/container/calert):
 
-```
+```sh
 docker pull ghcr.io/mr-karan/calert:latest
 ```
 
-`latest` is the default Ubuntu 24.04 image. It includes a shell, CA certificates, and timezone data for production debugging. `latest-scratch` contains the same static binary, certificates, and timezone data in a smaller scratch image, but has no shell or package tools.
+- `latest` (default): Built on **Ubuntu 26.04** with a shell, CA certificates, and timezone data for production debugging.
+- `latest-scratch`: Minimal `scratch` image containing the same static binary, CA certificates, and timezone data, without a shell or package tools.
 
-#### Custom Message Template
+#### Custom Configuration & Message Template
 
-Here's an example `docker-compose` config with a custom `message.tmpl` mounted inside the container:
+Mount your `config.toml` (and optional custom template) into the container and pass `--config`:
 
 ```yml
+services:
   calert:
     image: ghcr.io/mr-karan/calert:latest
+    command: ["--config", "/app/config.toml"]
     ports:
       - "6000:6000"
     volumes:
-      - ./message.tmpl:/etc/calert/message.tmpl
+      - ./config.toml:/app/config.toml:ro
+      - ./message.tmpl:/etc/calert/message.tmpl:ro # optional: set template = "/etc/calert/message.tmpl" in config.toml
 ```
 
-#### Custom Configuration 
+### Helm
 
-Here's an example `docker-compose` config with a custom `config.toml` mounted inside the container:
-```yml
-  calert:
-    image: ghcr.io/mr-karan/calert:latest
-    ports:
-      - "6000:6000"
-    volumes:
-      - ./config.toml:/app/config.sample.toml
+Deploy on Kubernetes using the official Helm chart in [contrib/helm/calert](contrib/helm/calert/README.md):
+
+```sh
+helm repo add calert https://mr-karan.github.io/calert/charts
+helm repo update
+helm install calert calert/calert -f values.yaml
 ```
 
-### Configuration
+## Configuration
 
-Refer to [config.sample.toml](./config.sample.toml) for instructions on how to configure `calert`.
+Refer to [config.sample.toml](config.sample.toml) for a complete example configuration.
 
-All the config variables can also be supplied as Environment Variables by prefixing `CALERT_` and replacing `.` (_period_) with `__` (_double underscores_).
+Every configuration key can also be set via environment variables by prefixing `CALERT_` and replacing `.` with `__` (double underscores):
 
-Example:
+- `app.address` → `CALERT_APP__ADDRESS`
+- `providers.prod_alerts.endpoint` → `CALERT_PROVIDERS__PROD_ALERTS__ENDPOINT`
+- `providers.prod_alerts.redis.password` → `CALERT_PROVIDERS__PROD_ALERTS__REDIS__PASSWORD`
 
-- `app.address` would become `CALERT_APP__ADDRESS`
+### App
 
-#### App
+| Key | Description | Sample Default |
+|---|---|---|
+| `app.address` | Address for the HTTP server to listen on. | `0.0.0.0:6000` |
+| `app.server_timeout` | HTTP read/write timeout (also bounds per-request dispatch timeout). | `60s` |
+| `app.enable_request_logs` | Enable HTTP request logging. | `true` |
+| `app.log` | Log level (`info` or `debug`). | `info` |
 
-|  Key  	|  Explanation 	| Default 	|
-|---	| ---	| --- |
-|  `app.address` 	| Address of the HTTP Server. 	| `0.0.0.0:6000`	|
-|  `app.server_timeout` 	| Server timeout for HTTP requests.  	| `5s` |
-|  `app.enable_request_logs` 	| Enable HTTP request logging.  	| `true` |
-|  `app.log` 	| Use `debug` to enable verbose logging. Can be set to `info` otherwise.  	| `info` |
+### Providers
 
+`calert` loads a map of _providers_ keyed by room name (`providers.<room_name>`). Each provider has its own configuration based on its `type`. Currently `google_chat` is supported, and the provider interface allows adding arbitrary providers.
 
-#### Providers
+| Key | Description | Required | Default |
+|---|---|---|---|
+| `providers.<room_name>.type` | Provider type. Currently only `google_chat` is supported. | no | `google_chat` |
+| `providers.<room_name>.endpoint` | Google Chat webhook URL to send alerts to. | **yes** | - |
+| `providers.<room_name>.max_idle_conns` | Maximum keep-alive connections to keep in the HTTP pool. | no | `50` |
+| `providers.<room_name>.timeout` | Timeout for HTTP requests to the provider webhook URL. | no | `30s` |
+| `providers.<room_name>.proxy_url` | Optional HTTP proxy URL for outbound provider requests. | no | - |
+| `providers.<room_name>.template` | Path to the Go template used to render notifications. Automatically switches to `static/message-group.tmpl` in `group` mode when left at the default. | no | `static/message.tmpl` |
+| `providers.<room_name>.threaded_replies` | Send alerts as threaded replies. Always enabled in `group` mode. | no | `false` |
+| `providers.<room_name>.threading_mode` | `alert` uses deterministic per-alert lifecycle keys. `group` posts one aggregated message per Alertmanager `GroupKey`. | no | `alert` |
+| `providers.<room_name>.thread_ttl` | Group-mode state retention period. With `thread_rotation` set to `ttl` or `incident`, also the longest time a thread may stay quiet before the next notification starts a new thread. Keep longer than Alertmanager's `repeat_interval`. | no | `12h` |
+| `providers.<room_name>.thread_rotation` | Group mode: when a group starts a new thread (`none`: never, `ttl`: after `thread_ttl` without a post, `incident`: after `thread_ttl` or when firing again after all alerts resolved). See [docs/group-threading.md](docs/group-threading.md#thread-rotation). | no | `none` |
+| `providers.<room_name>.incident_grace` | With `thread_rotation = "incident"`: keep a new incident in the previous thread when the group posted less than this long ago. Must be shorter than `thread_ttl`. See [docs/group-threading.md](docs/group-threading.md#incident-grace). | no | `0s` (off) |
+| `providers.<room_name>.dedup_window` | Group mode: suppress sequential identical payloads within this window after successful delivery. | no | `2m` |
+| `providers.<room_name>.max_alerts_per_message` | Group mode: maximum alert sections rendered in a group card before summarizing overflow. | no | `10` |
+| `providers.<room_name>.redis.address` | Optional Redis `host:port` for shared group state across replicas. Omit for in-memory state. | no | - |
+| `providers.<room_name>.redis.password` | Optional Redis password. | no | `""` |
+| `providers.<room_name>.redis.db` | Optional Redis database index. | no | `0` |
+| `providers.<room_name>.redis.key_prefix` | Optional prefix for Redis keys (`<prefix>:group:<sha256>`). | no | `calert` |
+| `providers.<room_name>.dry_run` | Render templates without sending actual notifications (useful when testing config changes). | no | `false` |
+| `providers.<room_name>.retry_max` | Maximum number of HTTP retries on transient errors and HTTP 429. | no | `3` |
+| `providers.<room_name>.retry_wait_min` | Minimum backoff wait between retries. | no | `1s` |
+| `providers.<room_name>.retry_wait_max` | Maximum backoff wait between retries. | no | `5s` |
 
-`calert` can load a map of different _providers_. The unique identifier for the `provider` is the room name. Each provider has it's own configuration, based on it's `provider_type`. Currently `calert` supports Google Chat but can support arbitary providers as well.
+## Threading in Google Chat
 
-|  Key  	|  Explanation 	| Required 	| Default 	|
-|---	| ---	| ---	| --- |
-|  `providers.<room_name>.type` 	| Provider type. Currently only `google_chat` is supported. 	| no | `google_chat`	|
-|  `providers.<room_name>.endpoint` 	| Webhook URL to send alerts to.  	| yes | - |
-|  `providers.<room_name>.max_idle_conns` 	| Maximum Keep Alive connections to keep in the pool.  	| yes | `50` |
-|  `providers.<room_name>.timeout` 	| Timeout for making HTTP requests to the webhook URL.  	| yes | `30s` |
-|  `providers.<room_name>.template` 	| Template for rendering a formatted Alert notification.  	| yes | `static/message.tmpl` |
-|  `providers.<room_name>.thread_ttl` 	| Group-state retention period. With `thread_rotation` other than `none`, also the longest time a thread may stay quiet before the next notification starts a new thread. Keep it longer than Alertmanager's `repeat_interval` so a long incident keeps its thread.	| yes | `12h` |
-|  `providers.<room_name>.proxy_url` 	| Specify `proxy_url` as your proxy endpoint to route all HTTP requests to the provider via a proxy. | no | - |
-|  `providers.<room_name>.threaded_replies` 	| Whether to send threaded replies or not. Group mode always threads. | no | false |
-|  `providers.<room_name>.threading_mode` 	| `alert` (default) uses deterministic per-alert lifecycle keys. `group` uses one thread per Alertmanager GroupKey. | no | `alert` |
-|  `providers.<room_name>.thread_rotation` 	| Group mode: when a group leaves its thread for a new one. `none` keeps one thread per group. `ttl` starts a new thread after `thread_ttl` without a post. `incident` also starts a new thread when the group fires again after all its alerts resolved. See [docs/group-threading.md](docs/group-threading.md#thread-rotation). | no | `none` |
-|  `providers.<room_name>.incident_grace` 	| With `thread_rotation = "incident"`: a new incident stays in the previous thread when the group posted less than this long ago. Must be shorter than `thread_ttl`. See [docs/group-threading.md](docs/group-threading.md#incident-grace). | no | `0s` (off) |
-|  `providers.<room_name>.dedup_window` 	| Group-mode window for sequential identical payloads after successful delivery. | no | `2m` |
-|  `providers.<room_name>.max_alerts_per_message` 	| Maximum alert sections in a group card. | no | `10` |
-|  `providers.<room_name>.redis.*` 	| Optional Redis address, password, db, and key_prefix for shared group state. | no | - |
-|  `providers.<room_name>.dry_run` 	| In case you're simply experimenting with `calert` config changes and you don't wish to send _actual_ notifications, you can set true. | no | false |
-|  `providers.<room_name>.retry_max` 	| Maximum number of retries | no | `3` |
-|  `providers.<room_name>.retry_wait_min` 	| Minimum time to wait before retrying | no | `1s` |
-|  `providers.<room_name>.retry_wait_max` 	| Maximum time to wait before retrying | no | `5s` |
+`calert` supports two threading modes via `threading_mode`:
+
+| Mode | Message granularity | Thread key | Shared state |
+|---|---|---|---|
+| `alert` (default) | One message per alert | Deterministic per `(room, fingerprint, startsAt)` | Not needed |
+| `group` | One aggregated card per webhook payload | Per `(room, GroupKey)` + optional rotation anchor | In-memory or Redis |
+
+### Per-alert threading (`threading_mode = "alert"`)
+
+When `threaded_replies = true`, `calert` derives a deterministic thread key from each alert's `fingerprint` and `startsAt`:
+
+- Firing and resolved updates for the same alert lifecycle share one thread across restarts and replicas.
+- A refire after resolution carries a new `startsAt` from Alertmanager and automatically opens a new thread.
+
+### Group threading (`threading_mode = "group"`)
+
+Group mode sends one aggregated message per Alertmanager webhook payload into a single thread for the Alertmanager group, deduplicates repeated payloads, renders each resolved instance once, and optionally shares state across active-active replicas via Redis.
+
+With opt-in `thread_rotation`, you can also rotate group threads automatically:
+- `"none"` (default): one permanent thread per group.
+- `"ttl"`: start a new thread after `thread_ttl` without a post.
+- `"incident"`: start a new thread after `thread_ttl` without a post, or when the group fires again after all its alerts have resolved (with optional `incident_grace` to absorb flapping bursts).
+
+See **[docs/group-threading.md](docs/group-threading.md)** for full setup instructions, behavior details, and operational guidance.
 
 ## Message Templates
 
-`calert` supports Go templates for formatting alert messages. Templates have access to all alert fields and several helper functions.
+`calert` uses Go's `text/template` engine to format notifications. Three templates are bundled in `static/`:
+
+- [static/message.tmpl](static/message.tmpl) — default plain-text template for `alert` mode.
+- [static/message-card.tmpl](static/message-card.tmpl) — CardsV2 example template for `alert` mode.
+- [static/message-group.tmpl](static/message-group.tmpl) — aggregated summary + CardsV2 template selected automatically for `group` mode when `template` is left at the default.
 
 ### Available Template Functions
 
 | Function | Description | Example |
-|----------|-------------|---------|
-| `Title` | Title case string | `{{ .Labels.alertname \| Title }}` |
+|---|---|---|
+| `Title` | Title-case string | `{{ .Labels.alertname \| Title }}` |
 | `toUpper` | Uppercase string | `{{ .Labels.severity \| toUpper }}` |
 | `toLower` | Lowercase string | `{{ .Status \| toLower }}` |
 | `Contains` | Check if string contains substring | `{{ if Contains .Labels.alertname "CPU" }}...{{ end }}` |
 | `HasPrefix` | Check string prefix | `{{ if HasPrefix .Labels.instance "prod" }}...{{ end }}` |
 | `HasSuffix` | Check string suffix | `{{ if HasSuffix .Labels.job "exporter" }}...{{ end }}` |
 | `Replace` | Replace all occurrences | `{{ Replace .Labels.instance ":" "_" }}` |
-| `TrimSpace` | Trim whitespace | `{{ .Annotations.description \| TrimSpace }}` |
-| `Default` | Provide default value | `{{ .Annotations.runbook \| Default "No runbook" }}` |
+| `TrimSpace` | Trim leading and trailing whitespace | `{{ .Annotations.description \| TrimSpace }}` |
+| `Default` | Provide a fallback value if empty | `{{ .Annotations.runbook \| Default "No runbook" }}` |
 | `reReplaceAll` | Regex replace | `{{ reReplaceAll "\\d+" "X" .Labels.instance }}` |
-| `CurrentTime` | Current time (optional timezone) | `{{ CurrentTime "Asia/Kolkata" }}` |
-| `ConvertTZ` | Convert time to timezone | `{{ ConvertTZ .StartsAt "America/New_York" }}` |
-| `DurationSince` | Duration since time | `{{ DurationSince .StartsAt }}` |
-| `json` | JSON-escape a dynamic value before inserting it into CardsV2 JSON | `{{ json .Annotations.description }}` |
+| `CurrentTime` | Current time (optional IANA timezone) | `{{ CurrentTime "Asia/Kolkata" }}` |
+| `ConvertTZ` | Convert `time.Time` to an IANA timezone | `{{ ConvertTZ .StartsAt "America/New_York" }}` |
+| `DurationSince` | Elapsed duration since a `time.Time` | `{{ DurationSince .StartsAt }}` |
+| `json` | JSON-encode/escape a dynamic value for CardsV2 JSON | `{{ json .Annotations.description }}` |
 
 ### CardsV2 Support
 
-For rich formatting with colors and structured layouts, use Google Chat's [CardsV2](https://developers.google.com/chat/api/reference/rest/v1/cards) format by defining a `cardsV2` template block:
+For rich cards with headers, buttons, and collapsible sections, define a `cardsV2` template block following Google Chat's [CardsV2](https://developers.google.com/workspace/chat/api/reference/rest/v1/cards) schema. Always pass dynamic strings through `{{ json ... }}` so quotes and newlines are safely escaped:
 
-```
+```gotemplate
 {{- define "cardsV2" -}}
 {
   "cardId": {{ json (printf "alert-%s" .Fingerprint) }},
@@ -148,49 +186,48 @@ For rich formatting with colors and structured layouts, use Google Chat's [Cards
 {{- end -}}
 ```
 
-### Google Chat Formatting Limitations
+### Google Chat Text Formatting Limitations
 
-Google Chat's simple text webhook supports limited formatting:
+Google Chat's simple text messages support limited markdown:
 - **Bold**: `*text*`
 - **Italic**: `_text_`
 - **Strikethrough**: `~text~`
 - **Monospace**: `` `text` ``
 
-**Note**: HTML tags (like `<font color="...">`) and standard emoji shortcodes (`:warning:`) are **not supported** in simple text messages. For colors and rich formatting, use CardsV2 templates instead.
+HTML tags (such as `<font color="...">`) and emoji shortcodes (`:warning:`) are **not supported** in simple text messages. Use CardsV2 templates for rich layouts and styling.
 
 ## Alertmanager Integration
 
--   Alertmanager has the ability of group similar alerts together and fire only one event, clubbing all the alerts data into one event. `calert` leverages this and sends all alerts in one message by looping over the alerts and passing data in the template. You can configure the rules for grouping the alerts in `alertmanager.yml` config. You can read more about it [here](https://github.com/prometheus/docs/blob/master/content/docs/alerting/alertmanager.md#grouping).
-
-- Configure Alertmanager config file (`alertmanager.yml`) and give the address of calert web-server. You can refer to the [official documentation](https://prometheus.io/docs/alerting/configuration/#webhook_config) for more details.
-
-You can refer to the following config block to route webhook alerts to `calert`:
+Configure Alertmanager (`alertmanager.yml`) to send webhooks to `calert`'s `/dispatch` endpoint. The Alertmanager `receiver` name must match a configured `providers.<room_name>` in `config.toml` (unless overridden via `?room_name=`). See Alertmanager's [grouping](https://prometheus.io/docs/alerting/latest/alertmanager/#grouping) and [webhook_config](https://prometheus.io/docs/alerting/latest/configuration/#webhook_config) docs for details.
 
 ```yml
 route:
-    receiver: 'calert'
-    group_wait: 30s
-    group_interval: 60s
-    repeat_interval: 15m
-    group_by: ['room', 'alertName']
+  receiver: 'prod_alerts'
+  group_wait: 30s
+  group_interval: 60s
+  repeat_interval: 3h
+  group_by: ['alertname']
 
 receivers:
-    - name: 'calert'
-      webhook_configs:
+  - name: 'prod_alerts'
+    webhook_configs:
       - url: 'http://calert:6000/dispatch'
+        send_resolved: true
 ```
 
-### Understanding repeat_interval
+- In `alert` mode (default), `calert` loops over the alerts in the webhook payload and sends one message per alert.
+- In `group` mode, `calert` renders the entire webhook group into one aggregated message (`send_resolved: true` is required, and avoid including `instance` in `group_by` so related instances stay grouped).
 
-Alertmanager's `repeat_interval` controls how often alerts are re-sent while still firing. Deterministic thread keys keep the same alert lifecycle in the same thread and do not rotate when `thread_ttl` elapses. In group mode, `thread_ttl` controls retention of deduplication and resolved-status state. With `thread_rotation = "ttl"` or `"incident"` it is also the longest time a thread may stay quiet, so keep it longer than `repeat_interval`, see [docs/group-threading.md](docs/group-threading.md#thread-rotation).
+### Understanding `repeat_interval`
 
-If you want fewer repeated messages:
-- Increase `repeat_interval` in Alertmanager config
-- Increase `thread_ttl` in group mode when state, or with `thread_rotation` a quiet thread, should be kept longer
+Alertmanager's `repeat_interval` controls how often firing alerts are re-sent.
+- In `alert` mode, deterministic thread keys keep the same alert lifecycle in one thread regardless of `thread_ttl`.
+- In `group` mode with `thread_rotation = "none"`, `thread_ttl` controls retention of deduplication and resolved-status state only.
+- In `group` mode with `thread_rotation = "ttl"` or `"incident"`, `thread_ttl` is also the longest quiet time before a thread rotates—set `thread_ttl` **longer than `repeat_interval`** so long-running incidents stay in one thread. See [docs/group-threading.md](docs/group-threading.md#thread-rotation).
 
-### Kubernetes AlertmanagerConfig
+### Kubernetes `AlertmanagerConfig`
 
-When using Kubernetes `AlertmanagerConfig` CRD, the receiver name is automatically prefixed with `namespace/config-name/receiver`. Use the `room_name` query parameter to override:
+When using the Prometheus Operator `AlertmanagerConfig` CRD, the receiver name is prefixed with `namespace/config-name/receiver`. Override the target room with the `room_name` query parameter:
 
 ```yaml
 apiVersion: monitoring.coreos.com/v1alpha1
@@ -205,71 +242,53 @@ spec:
         - url: http://calert:6000/dispatch?room_name=prod_alerts
 ```
 
-## Threading Support in Google Chat
+## Observability
 
-`calert` ships with a basic support for sending multiple related alerts under a same thread, working around the limitations by Alertmanager.
+### Prometheus Metrics
 
-Alertmanager currently doesn't send any _Unique Identifier_ for each Alert. The use-case of sending related alerts under the same thread is helpful to triage similar alerts and see all their different states (_Firing_, _Resolved_) for people consuming these alerts. `calert` tries to solve this by:
+`calert` exposes application and Go runtime/process metrics in Prometheus exposition format at `/metrics`:
 
-- Use the alert `fingerprint` and `startsAt` fields to derive a deterministic thread key.
-- Firing and resolved updates for the same alert lifecycle share a thread across restarts and replicas.
-- A refire with a new `startsAt` receives a new thread key.
+| Metric | Description | Type |
+|---|---|---|
+| `calert_uptime_seconds` | Uptime of the process in seconds. | `counter` |
+| `calert_start_timestamp` | UNIX timestamp when the process booted. | `gauge` |
+| `calert_http_requests_total` | Total HTTP requests, labeled by `handler`. | `counter` |
+| `calert_http_request_errors_total` | Total HTTP request errors, labeled by `handler`. | `counter` |
+| `calert_http_request_duration_seconds` | HTTP request duration in seconds, labeled by `handler`. | `histogram` |
+| `calert_alerts_dispatched_total` | Alerts dispatched to providers, labeled by `provider` and `room`. | `counter` |
+| `calert_alerts_dispatched_errors_total` | Alert dispatch errors, labeled by `provider`, `room`, and `reason` (`preparing`, `sending`). | `counter` |
+| `calert_alerts_dispatched_duration_seconds` | Upstream dispatch latency in seconds, labeled by `provider` and `room`. | `histogram` |
+| `calert_alerts_deduplicated_total` | Group-mode duplicate payloads suppressed within `dedup_window`, labeled by `provider` and `room`. | `counter` |
+| `calert_group_dedup_store_errors_total` | Group state store (Redis) read/write errors, labeled by `provider` and `room`. | `counter` |
 
-### Group threading (one thread per Alertmanager group)
+### Health Endpoint
 
-The above is per-alert threading (`threading_mode = "alert"`, the default). `calert` also supports threading one whole Alertmanager **group** into a single thread with an aggregated message, and sharing dedup state across active-active instances via Redis. See [docs/group-threading.md](docs/group-threading.md) for setup.
+`calert` exposes a health check endpoint at `GET /ping` returning `{"status":"success","data":"pong"}`.
 
-## Prometheus Metrics
+## Testing Locally
 
-`calert` exposes various metrics in the Prometheus exposition format.
+You can send a sample Alertmanager payload to a local `calert` instance (with `dry_run = true` if you don't want to hit Google Chat) using [docs/examples/send_alert.sh](docs/examples/send_alert.sh) and [docs/examples/mock_payload.json](docs/examples/mock_payload.json):
 
-Here's a list of internal app metrics available at `/metrics`:
+```sh
+cd docs/examples
+./send_alert.sh
+```
 
-|  Name  	|  Description 	| Data type 	|
-|---	| ---	| --- |
-|  `calert_uptime_seconds` 	| Uptime of app (_in seconds_). 	| `counter`	|
-|  `calert_start_timestamp` 	| UNIX timestamp since the app was booted.  	| `gauge` |
-|  `calert_http_requests_total` 	| Number of HTTP requests, grouped with labels like `handler`.  	| `counter` |
-|  `calert_http_request_duration_seconds_{sum,count,bucket}` 	| Duration of HTTP request (_in seconds_).  	| `histogram` |
-|  `calert_alerts_dispatched_total` 	| Number of alerts dispatched to upstream providers, grouped with labels like `provider` and `room`.  	| `counter` |
-|  `calert_alerts_dispatched_duration_seconds_{sum,count,bucket}` 	| Duration to send an alert to upstream provider.	| `histogram` |
-
-It also exposes Go process metrics in addition to app metrics, which you can use to monitor the performance of `calert`.
-
-## Health endpoint
-
-`calert` exposes an health endpoint at `/ping`.
+A local Docker Compose stack with Prometheus, Alertmanager, and `calert` is also available via `make dev-docker`.
 
 ## Migrating from v1 to v2
 
-A few notes on `v2` migration:
+`v2` is a complete rewrite and **a breaking release** from `v1`:
 
-### Config schema changes
+- **Configuration schema:** Refer to [config.sample.toml](config.sample.toml) for the `v2` schema.
+- **Dry-run mode:** Set `dry_run = true` per provider while testing configuration and template changes.
+- **Room routing:** `calert` routes alerts using the Alertmanager `receiver` field matching `providers.<room_name>` (or `?room_name=<room_name>` to override) rather than the `v1` `?room=` query parameter.
 
-`v2` is a complete rewrite from scratch and **is a breaking release**. The configuration has changed extensively. Please refer to latest [`config.sample.toml`](config.sample.toml) for a complete working example of the config.
+## Contributing
 
-### Dry Run Mode
+PRs for bug fixes and features are welcome. For larger changes, please open an issue first to discuss scope and design.
 
-In case you're simply experimenting with `calert` config changes and you don't wish to send _actual_ notifications, you can set `dry_run=true` in each provider.
-
-### Room Name for Google Chat
-
-Apart from the config, `calert` now determines the `room` based on the `receiver` specified in Alertmanager config. Previously, the room was identified with `?room` query parameter in each HTTP request. However, since the Alert payload contains the `receiver` name, it's better to extract this information from the labels instead.
-
-Here's an example of how Alertmanager config looks like. Notice the value of `receiver` (`prod_alerts`) should match one of `provider.<room_name>` (eg `provider.prod_alerts`) in your `config.toml`):
-
-```yml
-receivers:
-    - name: 'prod_alerts'
-      webhook_configs:
-      - url: 'http://calert:6000/dispatch'
-```
-
-## Contribution
-
-PRs on Feature Requests, Bug fixes are welcome. Feel free to open an issue and have a discussion first.
-
-For deployment manifests like Helm, Kustomize, Nomad etc - they're placed under `contrib` folder and generally manintained by the community.
+Deployment manifests (such as the Helm chart under [contrib/helm/calert](contrib/helm/calert)) live under `contrib/`.
 
 ## License
 

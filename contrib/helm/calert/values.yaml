@@ -58,7 +58,7 @@ providers: {}
   #     address: "redis:6379"
   #     password: ""
   #     db: 0
-  #     key_prefix: "calert:"
+  #     key_prefix: "calert"
   #   dry_run: false # Enable dry run mode (no actual notifications sent).
   #   retry_max: 3 # Maximum number of retries.
   #   retry_wait_min: "1s" # Minimum wait time between retries.
